@@ -1,0 +1,362 @@
+#!/usr/bin/python -tt
+
+# Giphizer 1.0
+# Copyright (c) 2016 Jason Jackson
+# Released under the MIT license; see LICENSE for details.
+
+"""
+Have you ever though 'oh man, giphy is great but I wish I could use it in my terminal'?
+Well now you can! (Assuming you're an iTerm user...)
+For usage info, just run this without arguments, or with -h or --help.
+"""
+
+import argparse
+import errno
+import fcntl
+import json
+import os
+import platform
+import re
+import socket
+import sys
+import tempfile
+from base64 import b64encode
+from os import path
+from urllib import urlencode, urlopen
+
+GIPHY_API_KEY = "dc6zaTOxFJmzC"  # Giphy's public beta API key
+MAX_CACHED_GIFS = 1000           # Adjust freely; set to 0 to disable caching
+
+
+def main():
+    """
+    Main program logic.
+    """    
+    args = parse_command_line()
+
+    incapable = check_image_capability()
+    if incapable is not None:
+        if not args.quiet:
+            if incapable == "iTerm":
+                sys.stderr.write("error: no GIFs without iTerm, sorry\n")
+            elif incapable == "screen":
+                sys.stderr.write("error: No GIFs under tmux or GNU screen, sorry\n")
+            exit(1)
+        else:
+            exit(0)
+
+    if check_internet_connection() is not None:
+        if not args.quiet:
+            sys.stderr.write("error: No GIFs without an internet connection, sorry\n")
+            exit(1)
+        else:
+            exit(0)
+
+    image_info = choose_image(args)
+    if image_info is None:
+        if not args.quiet:
+            sys.stderr.write("error: No matching GIFs, sorry\n")
+        exit(1)
+
+    if MAX_CACHED_GIFS > 0:
+        image_data = load_image(image_info["id"], image_info["url"])
+    else:
+        image_data = download_image(image_info["url"])
+
+    display_image(image_data, image_info["url"])
+    if not args.quiet:
+        print image_info["page"]
+        display_logo()
+
+
+def parse_command_line():
+    """
+    Parses command-line options, returning a Namespace. Displays usage/error and exits
+    if there are any problems with the command line, or if the user requested help.
+    """
+    parser = argparse.ArgumentParser(usage="%(prog)s [options] query",
+                                     description="Displays a GIF in your iTerm terminal. "
+                                                 "The 'random' and default 'translate' endpoints select a random GIF "
+                                                 "based on the word or phrase you enter, discarding punctuation. "
+                                                 "The 'id' endpoint attempts to display the specific GIF requested. "
+                                                 "Note that iTerm is required, and that images aren't displayed "
+                                                 "under tmux or GNU screen.",
+                                     epilog="Giphizer serves images from http://giphy.com, "
+                                             "but has no official connection with Giphy.")
+    parser.add_argument("query", nargs="*",
+                        help="the term, phrase or ID to search Giphy for")
+    parser.add_argument("-e", "--endpoint", default="translate", choices=["translate", "random", "id"],
+                        help="the Giphy endpoint to use (default = 'translate')")
+    parser.add_argument("-r", "--max-rating", choices=["y", "g", "pg", "pg-13", "r"],
+                        help="disallow GIFs rated higher (default = no limit, i.e. use any GIF)")
+    parser.add_argument("-q", "--quiet", action="store_true",
+                        help="suppress display of GIF URL, and error messages (except crash-level problems)")
+
+    # Try to read options from our dotfile
+    dot_file_opts = read_options_from_file("~/.giphyrc")
+    args = parser.parse_args(dot_file_opts)
+
+    # Read options from the command line
+    parser.parse_args(namespace=args)
+
+    # Massage the query received into a single trimmed string
+    query = ""
+    for arg in args.query:
+        arg = re.sub("\s+", " ", arg).strip()
+        if arg != "":
+            if query != "": query += " "
+            query += arg
+
+    args.query = query
+    if args.query == "":
+        parser.print_help()
+        display_logo()
+        exit(0)
+
+    return args
+
+
+def read_options_from_file(path):
+    """
+    Reads options from a file, if it exists, returning an array of strings.
+    Lines beginning with hash characters are ignored, so they can serve as comments in the file.
+    """
+    all_args = []
+
+    try:
+        with open(path.expanduser(path), "rU") as option_file:
+            lines = option_file.readlines()
+
+        for line in lines:
+            line = line.strip()
+            if line == "" or line[0] == "#":
+                continue
+
+            args = line.split()
+            all_args += args
+    except:
+        pass  # Ignore any error (the file probably just doesn't exist)
+
+    return all_args
+
+
+def check_image_capability():
+    """
+    Checks whether the current environment supports displaying images properly. First, iTerm is required.
+    Second, we shouldn't be running under tmux or GNU screen; tmux can display some images, but fails on some GIFs,
+    and doesn't move the cursor properly when it does work, leaving the prompt on top of the displayed image;
+    GNU screen doesn't pass the escape sequences through to iTerm, so big gobs of Base64 data get displayed
+    instead of an image.
+    """
+    if os.environ.get("ITERM_PROFILE") is None:
+        # It doesn't look like we're running under iTerm
+        return "iTerm"
+
+    term = os.environ.get("TERM")
+    if term is not None and term.startswith("screen"):
+        # GNU screen and tmux both set TERM to a string beginning with 'screen';
+        # GNU screen sets STY, tmux doesn't
+        return "screen"
+
+    return None  # No problems detected
+
+
+def check_internet_connection():
+    """
+    Checks whether the internet is reachable by trying to open a connection to Google's public DNS.
+    Based on http://stackoverflow.com/a/33117579.
+    """
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)             # Time out in 5 seconds
+        sock.connect(("8.8.8.8", 53))  # 53 = DNS port
+        return None
+    except Exception as ex:
+        return str(ex)
+
+
+def choose_image(args):
+    """
+    Chooses a GIF, using the preferred endpoint ('id, 'random', or 'translate').
+    Returns a dictionary containing some info about the GIF, including its URL.
+    """
+    url = "http://api.giphy.com/v1/gifs/"
+
+    if args.endpoint == "id":
+        url += args.query
+        url += "?%s" % urlencode({"api_key": GIPHY_API_KEY})
+    elif args.endpoint == "random":
+        url += "random?%s" % urlencode({"api_key": GIPHY_API_KEY, "tag": args.query})
+    else:
+        # Use the 'translate' endpoint by default
+        url += "translate?%s" % urlencode({"api_key": GIPHY_API_KEY, "s": args.query})
+
+    if args.max_rating is not None:
+        url += "&rating=" + args.max_rating
+
+    response = json.load(urlopen(url))
+    if response["data"] == []:
+        return None
+
+    data = response["data"]
+
+    if args.endpoint == "random":
+        return {"id":     data["id"],
+                "page":   data["url"],
+                "url":    data["image_url"],
+                "width":  int(data["image_width"]),
+                "height": int(data["image_height"])}
+    else:
+        # Endpoint is 'translate' or 'id'
+        original = data["images"]["original"]
+        return {"id":     data["id"],
+                "page":   data["url"],
+                "url":    original["url"],
+                "width":  int(original["width"]),
+                "height": int(original["height"]),
+                "size":   int(original["size"]),
+                "rating": data["rating"]}
+
+
+def download_image(url):
+    """
+    Downloads a GIF, returning its raw image data.
+    """
+    return urlopen(url).read()
+
+
+def load_image(image_id, url):
+    """
+    Loads a GIF from cache, first downloading it if needed. Returns the GIF's raw image data.
+    Some attempts are made to prevent concurrently-executing instances of this program from stomping on
+    each other's use of cache, but concurrent interactions haven't been thoroughly tested.
+    """
+    cache_dir = path.expanduser("~/Library/Caches/Giphizer")
+    cache_path = path.join(cache_dir, image_id + ".gif")
+
+    try:
+        # Ensure that the cache dir exists
+        os.makedirs(cache_dir)
+    except OSError:
+        if not path.isdir(cache_dir): raise
+
+    try:
+        with open(cache_path, "rb") as cache_file:
+            # GIF already cached
+            return cache_file.read()
+    except IOError as ex:
+        if ex.errno != errno.ENOENT:
+            raise  # An error other than file-doesn't-exist occurred; bubble it up
+
+        # GIF not cached yet, download it
+        image_data = urlopen(url).read()
+
+        temp_path = None
+        with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
+            temp_path = temp_file.name
+            temp_file.write(image_data)
+            temp_file.flush()
+            fsync(temp_file.fileno())
+
+        if temp_path is not None:
+            try:
+                os.rename(temp_path, cache_path)  # Atomic operation
+            except:
+                # If caching is broken, the program can still work, albeit more slowly,
+                # so let's silently continue on without caching, and try not to waste any disk space
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass  # Oh well
+
+            fsync_dir(cache_dir)
+            clean_cache(cache_dir)
+
+        return image_data
+
+
+def display_image(image_data, name):
+    """
+    Displays a GIF by printing it to the terminal using iTerm-specific escape sequences.
+    This should not be called when not running under iTerm, or when running under tmux or GNU screen
+    (see check_image_capability() for details).
+    """
+    open_esc = "\033]"  # "\033Ptmux;\033\033]" under tmux
+    close_esc = "\a"    # "\a\033\\" under tmux
+
+    name = "name=%s;" % b64encode(name)
+    width = ""
+    inline = "inline=1"
+
+    print "%s1337;File=%s%s%s:%s%s" % (open_esc, name, width, inline, b64encode(image_data), close_esc)
+    return True
+
+
+def display_logo():
+    """
+    Displays a Giphy logo image.
+    Nothing is displayed under tmux or GNU screen, or when not running under iTerm.
+    """
+    if check_image_capability() is not None: return
+
+    try:
+        logo_name = path.dirname(path.realpath(__file__)) + "/giphy_logo.png"
+        with open(logo_name, "rb") as logo_file:
+            image_data = logo_file.read()
+        display_image(image_data, "giphy_logo.png")
+    except:
+        pass  # Ignore any error
+
+
+def clean_cache(cache_dir_path):
+    """
+    Cleans the cache by removing old files, based on last access time,
+    until there are at most MAX_CACHED_GIFS files left in the directory.
+    If we've somehow messed up in load_image() and left temp files in the cache directory,
+    they are handled here just like GIFs, i.e. as part of the cache which may be aged out.
+    """
+    cwd = os.getcwd()
+
+    try:
+        os.chdir(cache_dir_path)
+        files = sorted(os.listdir(cache_dir_path), key=path.getatime)
+        delete = len(files) - MAX_CACHED_GIFS
+
+        for i in range(0, delete):
+            try:
+                # Attempt to perform atomic delete in a way which won't break with concurrent program runs
+                file_name = files[i]
+                with tempfile.NamedTemporaryFile(delete=True, dir=cache_dir_path, suffix=".trash") as temp_file:
+                    cache_path = path.join(cache_dir_path, file_name)
+                    os.rename(cache_path, temp_file.name)
+            except OSError as ex:
+                if ex.errno != errno.ENOENT:
+                    raise  # An error other than file-doesn't-exist occurred; bubble it up
+
+    finally:
+        os.chdir(cwd)
+
+
+def fsync(fd):
+    """
+    More effective fsync on macOS.
+    See https://github.com/untitaker/python-atomicwrites for background.
+    """
+    fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+
+
+def fsync_dir(dir_path):
+    """
+    Ensures that a directory is fsynced, i.e. that any changes to the metadata it contains
+    are visible in the file system. No effect on any files in the directory.
+    """
+    fd = os.open(dir_path, 0)
+
+    try:
+        fsync(fd)
+    finally:
+        os.close(fd)
+
+
+# Do the things
+main()
