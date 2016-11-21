@@ -26,7 +26,7 @@ You can override the default settings by placing options in `~/.giphyrc`, just a
 --max-rating=pg-13
 
 # Suppress display of URL just below each GIF
---quiet
+--bare
 ```
 
 

@@ -1,11 +1,11 @@
 #!/usr/bin/python -tt
 
-# Giphizer 1.0.1
+# Giphizer 1.1.0
 # Copyright (c) 2016 Jason Jackson
 # Released under the MIT license; see LICENSE for details.
 
 """
-Have you ever though 'oh man, giphy is great but I wish I could use it in my terminal'?
+Have you ever though 'oh man, Giphy is great, but I wish I could use it in my terminal'?
 Well now you can! (Assuming you're an iTerm user...)
 For usage info, just run this without arguments, or with -h or --help.
 """
@@ -64,7 +64,7 @@ def main():
         image_data = download_image(image_info["url"])
 
     display_image(image_data, image_info["url"])
-    if not args.quiet:
+    if not args.bare:
         print image_info["page"]
         display_logo()
 
@@ -75,22 +75,24 @@ def parse_command_line():
     if there are any problems with the command line, or if the user requested help.
     """
     parser = argparse.ArgumentParser(usage="%(prog)s [options] query",
-                                     description="Displays a GIF in your iTerm terminal. "
+                                     description="Giphizer displays a GIF in your iTerm terminal. "
                                                  "The 'random' and default 'translate' endpoints select a random GIF "
                                                  "based on the word or phrase you enter, discarding punctuation. "
                                                  "The 'id' endpoint attempts to display the specific GIF requested. "
                                                  "Note that iTerm is required, and that images aren't displayed "
                                                  "under tmux or GNU screen.",
-                                     epilog="Giphizer serves images from http://giphy.com, "
+                                     epilog="Giphizer displays images from http://giphy.com, "
                                              "but has no official connection with Giphy.")
     parser.add_argument("query", nargs="*",
                         help="the term, phrase or ID to search Giphy for")
+    parser.add_argument("-b", "--bare", action="store_true",
+                        help="display bare GIFs, without their URLs")
     parser.add_argument("-e", "--endpoint", default="translate", choices=["translate", "random", "id"],
                         help="the Giphy endpoint to use (default = 'translate')")
     parser.add_argument("-r", "--max-rating", choices=["y", "g", "pg", "pg-13", "r"],
                         help="disallow GIFs rated higher (default = no limit, i.e. use any GIF)")
     parser.add_argument("-q", "--quiet", action="store_true",
-                        help="suppress display of GIF URL, and error messages (except crash-level problems)")
+                        help="suppress error messages (except crash-level problems)")
 
     # Try to read options from our dotfile
     dot_file_opts = read_options_from_file("~/.giphyrc")
