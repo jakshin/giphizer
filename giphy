@@ -1,6 +1,6 @@
 #!/usr/bin/python -tt
 
-# Giphizer 1.0
+# Giphizer 1.0.1
 # Copyright (c) 2016 Jason Jackson
 # Released under the MIT license; see LICENSE for details.
 
@@ -31,7 +31,7 @@ MAX_CACHED_GIFS = 1000           # Adjust freely; set to 0 to disable caching
 def main():
     """
     Main program logic.
-    """    
+    """
     args = parse_command_line()
 
     incapable = check_image_capability()
@@ -116,7 +116,7 @@ def parse_command_line():
     return args
 
 
-def read_options_from_file(path):
+def read_options_from_file(options_path):
     """
     Reads options from a file, if it exists, returning an array of strings.
     Lines beginning with hash characters are ignored, so they can serve as comments in the file.
@@ -124,7 +124,7 @@ def read_options_from_file(path):
     all_args = []
 
     try:
-        with open(path.expanduser(path), "rU") as option_file:
+        with open(path.expanduser(options_path), "rU") as option_file:
             lines = option_file.readlines()
 
         for line in lines:
@@ -134,8 +134,9 @@ def read_options_from_file(path):
 
             args = line.split()
             all_args += args
-    except:
-        pass  # Ignore any error (the file probably just doesn't exist)
+    except IOError as ex:
+        if ex.errno != errno.ENOENT:
+	        raise  # It's fine for the file not to exist, but any other error is bad
 
     return all_args
 
@@ -275,7 +276,7 @@ def load_image(image_id, url):
         return image_data
 
 
-def display_image(image_data, name):
+def display_image(image_data, image_name):
     """
     Displays a GIF by printing it to the terminal using iTerm-specific escape sequences.
     This should not be called when not running under iTerm, or when running under tmux or GNU screen
@@ -284,7 +285,7 @@ def display_image(image_data, name):
     open_esc = "\033]"  # "\033Ptmux;\033\033]" under tmux
     close_esc = "\a"    # "\a\033\\" under tmux
 
-    name = "name=%s;" % b64encode(name)
+    name = "name=%s;" % b64encode(image_name)
     width = ""
     inline = "inline=1"
 
@@ -300,8 +301,8 @@ def display_logo():
     if check_image_capability() is not None: return
 
     try:
-        logo_name = path.dirname(path.realpath(__file__)) + "/giphy_logo.png"
-        with open(logo_name, "rb") as logo_file:
+        logo_path = path.dirname(path.realpath(__file__)) + "/giphy_logo.png"
+        with open(logo_path, "rb") as logo_file:
             image_data = logo_file.read()
         display_image(image_data, "giphy_logo.png")
     except:
