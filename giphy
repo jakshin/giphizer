@@ -35,20 +35,11 @@ def main():
 
     incapable = check_image_capability()
     if incapable is not None:
-        if not args.quiet:
-            if incapable == "iTerm":
-                sys.stderr.write("error: no GIFs without iTerm, sorry\n")
-            elif incapable == "screen":
-                sys.stderr.write("error: No GIFs under tmux or GNU screen, sorry\n")
-            exit(1)
-        else:
-            exit(0)
+        display_error(args, incapable)
 
     image_info = choose_image(args)
-    if image_info is None:
-        if not args.quiet:
-            sys.stderr.write("error: No matching GIFs, sorry\n")
-        exit(1)
+    if image_info.get("error") is not None:
+        display_error(args, image_info["error"])
 
     if MAX_CACHED_GIFS > 0:
         image_data = load_image(image_info["id"], image_info["url"])
@@ -71,8 +62,8 @@ def parse_command_line():
                                                  "The 'random' and default 'translate' endpoints select a random GIF "
                                                  "based on the word or phrase you enter, discarding punctuation. "
                                                  "The 'id' endpoint attempts to display the specific GIF requested. "
-                                                 "Note that iTerm is required, and that images aren't displayed "
-                                                 "under tmux or GNU screen. Source: https://github.com/jakshin/giphizer",
+                                                 "iTerm is needed, and images aren't displayed in tmux or GNU screen."
+                                                 "Source: https://github.com/jakshin/giphizer",
                                      epilog="Giphizer displays images from https://giphy.com, "
                                             "but has no official connection with Giphy.")
     parser.add_argument("query", nargs="*",
@@ -96,9 +87,10 @@ def parse_command_line():
     # Massage the query received into a single trimmed string
     query = ""
     for arg in args.query:
-        arg = re.sub("\s+", " ", arg).strip()
+        arg = re.sub(r'\s+', " ", arg).strip()
         if arg != "":
-            if query != "": query += " "
+            if query != "":
+                query += " "
             query += arg
 
     args.query = query
@@ -135,6 +127,18 @@ def read_options_from_file(options_path):
     return all_args
 
 
+def display_error(args, err_msg):
+    """
+    Displays the given error message and exits with an error code,
+    unless --quiet was passed, in which case it just silently exits.
+    """
+    if args.quiet:
+        exit(0)
+    else:
+        sys.stderr.write("error: %s\n" % err_msg)
+        exit(1)
+
+
 def check_image_capability():
     """
     Checks whether the current environment supports displaying images properly. First, iTerm is required.
@@ -145,13 +149,13 @@ def check_image_capability():
     """
     if os.environ.get("ITERM_PROFILE") is None:
         # It doesn't look like we're running under iTerm
-        return "iTerm"
+        return "GIFs can only be displayed in iTerm"
 
     term = os.environ.get("TERM")
     if term is not None and term.startswith("screen"):
         # GNU screen and tmux both set TERM to a string beginning with 'screen';
         # GNU screen sets STY, tmux doesn't
-        return "screen"
+        return "GIFs can't be displayed in tmux or GNU screen"
 
     return None  # No problems detected
 
@@ -162,7 +166,10 @@ def choose_image(args):
     Returns a dictionary containing some info about the GIF, including its URL.
     """
     api_key = os.environ.get("GIPHY_API_KEY")
-    url = "http://api.giphy.com/v1/gifs/"
+    if api_key is None:
+        return {"error": "No API key provided in the $GIPHY_API_KEY environment variable"}
+
+    url = "https://api.giphy.com/v1/gifs/"
 
     if args.endpoint == "id":
         url += args.query
@@ -177,9 +184,6 @@ def choose_image(args):
         url += "&rating=" + args.max_rating
 
     response = json.load(urlopen(url))
-    if response["data"] == []:
-        return None
-
     data = response["data"]
 
     if args.endpoint == "random":
@@ -220,7 +224,8 @@ def load_image(image_id, url):
         # Ensure that the cache dir exists
         os.makedirs(cache_dir)
     except OSError:
-        if not path.isdir(cache_dir): raise
+        if not path.isdir(cache_dir):
+            raise
 
     try:
         with open(cache_path, "rb") as cache_file:
@@ -233,7 +238,6 @@ def load_image(image_id, url):
         # GIF not cached yet, download it
         image_data = urlopen(url).read()
 
-        temp_path = None
         with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
             temp_path = temp_file.name
             temp_file.write(image_data)
@@ -243,13 +247,13 @@ def load_image(image_id, url):
         if temp_path is not None:
             try:
                 os.rename(temp_path, cache_path)  # Atomic operation
-            except:
+            except OSError:
                 # If caching is broken, the program can still work, albeit more slowly,
-                # so let's silently continue on without caching, and try not to waste any disk space
+                # so let's just try to clean up our temp file, then silently continue
                 try:
                     os.remove(temp_path)
-                except:
-                    pass  # Oh well
+                except OSError:
+                    pass  # Oh, well
 
             fsync_dir(cache_dir)
             clean_cache(cache_dir)
@@ -280,14 +284,15 @@ def display_logo():
     Displays a Giphy logo image.
     Nothing is displayed under tmux or GNU screen, or when not running under iTerm.
     """
-    if check_image_capability() is not None: return
+    if check_image_capability() is not None:
+        return
 
     try:
         logo_path = path.dirname(path.realpath(__file__)) + "/giphy_logo.png"
         with open(logo_path, "rb") as logo_file:
             image_data = logo_file.read()
         display_image(image_data, "giphy_logo.png")
-    except:
+    except Exception:
         pass  # Ignore any error
 
 
