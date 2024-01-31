@@ -1,8 +1,9 @@
-#!/usr/bin/python -tt
+#!/usr/bin/env python3
 
-# Giphizer 1.1.0
-# Copyright (c) 2016 Jason Jackson
+# Giphizer 2.0
+# Copyright (c) 2016, 2024 Jason Jackson
 # Released under the MIT license; see LICENSE for details.
+# https://github.com/jakshin/giphizer
 
 """
 Have you ever though 'oh man, Giphy is great, but I wish I could use it in my terminal'?
@@ -15,16 +16,14 @@ import errno
 import fcntl
 import json
 import os
-import platform
 import re
-import socket
 import sys
 import tempfile
 from base64 import b64encode
 from os import path
-from urllib import urlencode, urlopen
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
-GIPHY_API_KEY = "dc6zaTOxFJmzC"  # Giphy's public beta API key
 MAX_CACHED_GIFS = 1000           # Adjust freely; set to 0 to disable caching
 
 
@@ -45,13 +44,6 @@ def main():
         else:
             exit(0)
 
-    if check_internet_connection() is not None:
-        if not args.quiet:
-            sys.stderr.write("error: No GIFs without an internet connection, sorry\n")
-            exit(1)
-        else:
-            exit(0)
-
     image_info = choose_image(args)
     if image_info is None:
         if not args.quiet:
@@ -65,7 +57,7 @@ def main():
 
     display_image(image_data, image_info["url"])
     if not args.bare:
-        print image_info["page"]
+        print(image_info["page"])
         display_logo()
 
 
@@ -75,14 +67,14 @@ def parse_command_line():
     if there are any problems with the command line, or if the user requested help.
     """
     parser = argparse.ArgumentParser(usage="%(prog)s [options] query",
-                                     description="Giphizer displays a GIF in your iTerm terminal. "
+                                     description="Giphizer displays a Giphy GIF in your iTerm terminal. "
                                                  "The 'random' and default 'translate' endpoints select a random GIF "
                                                  "based on the word or phrase you enter, discarding punctuation. "
                                                  "The 'id' endpoint attempts to display the specific GIF requested. "
                                                  "Note that iTerm is required, and that images aren't displayed "
-                                                 "under tmux or GNU screen.",
-                                     epilog="Giphizer displays images from http://giphy.com, "
-                                             "but has no official connection with Giphy.")
+                                                 "under tmux or GNU screen. Source: https://github.com/jakshin/giphizer",
+                                     epilog="Giphizer displays images from https://giphy.com, "
+                                            "but has no official connection with Giphy.")
     parser.add_argument("query", nargs="*",
                         help="the term, phrase or ID to search Giphy for")
     parser.add_argument("-b", "--bare", action="store_true",
@@ -126,7 +118,7 @@ def read_options_from_file(options_path):
     all_args = []
 
     try:
-        with open(path.expanduser(options_path), "rU") as option_file:
+        with open(path.expanduser(options_path), "r") as option_file:
             lines = option_file.readlines()
 
         for line in lines:
@@ -138,7 +130,7 @@ def read_options_from_file(options_path):
             all_args += args
     except IOError as ex:
         if ex.errno != errno.ENOENT:
-	        raise  # It's fine for the file not to exist, but any other error is bad
+            raise  # It's fine for the file not to exist, but any other error is bad
 
     return all_args
 
@@ -164,35 +156,22 @@ def check_image_capability():
     return None  # No problems detected
 
 
-def check_internet_connection():
-    """
-    Checks whether the internet is reachable by trying to open a connection to Google's public DNS.
-    Based on http://stackoverflow.com/a/33117579.
-    """
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)             # Time out in 5 seconds
-        sock.connect(("8.8.8.8", 53))  # 53 = DNS port
-        return None
-    except Exception as ex:
-        return str(ex)
-
-
 def choose_image(args):
     """
     Chooses a GIF, using the preferred endpoint ('id, 'random', or 'translate').
     Returns a dictionary containing some info about the GIF, including its URL.
     """
+    api_key = os.environ.get("GIPHY_API_KEY")
     url = "http://api.giphy.com/v1/gifs/"
 
     if args.endpoint == "id":
         url += args.query
-        url += "?%s" % urlencode({"api_key": GIPHY_API_KEY})
+        url += "?%s" % urlencode({"api_key": api_key})
     elif args.endpoint == "random":
-        url += "random?%s" % urlencode({"api_key": GIPHY_API_KEY, "tag": args.query})
+        url += "random?%s" % urlencode({"api_key": api_key, "tag": args.query})
     else:
         # Use the 'translate' endpoint by default
-        url += "translate?%s" % urlencode({"api_key": GIPHY_API_KEY, "s": args.query})
+        url += "translate?%s" % urlencode({"api_key": api_key, "s": args.query})
 
     if args.max_rating is not None:
         url += "&rating=" + args.max_rating
@@ -287,11 +266,12 @@ def display_image(image_data, image_name):
     open_esc = "\033]"  # "\033Ptmux;\033\033]" under tmux
     close_esc = "\a"    # "\a\033\\" under tmux
 
-    name = "name=%s;" % b64encode(image_name)
+    name = "name=%s;" % b64encode(image_name.encode("utf-8")).decode("utf-8")
     width = ""
     inline = "inline=1"
+    encoded_image_data = b64encode(image_data).decode("utf-8")
 
-    print "%s1337;File=%s%s%s:%s%s" % (open_esc, name, width, inline, b64encode(image_data), close_esc)
+    print("%s1337;File=%s%s%s:%s%s" % (open_esc, name, width, inline, encoded_image_data, close_esc))
     return True
 
 
