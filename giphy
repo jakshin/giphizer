@@ -16,13 +16,15 @@ import errno
 import fcntl
 import json
 import os
+import platform
 import re
+import ssl
 import sys
 import tempfile
+import urllib.error, urllib.parse, urllib.request
 from base64 import b64encode
 from os import path
-from urllib.parse import urlencode, quote
-from urllib.request import urlopen
+from urllib.parse import urlencode
 
 MAX_CACHED_GIFS = 1000           # Adjust freely; set to 0 to disable caching
 
@@ -189,7 +191,7 @@ def choose_image(args):
     url = "https://api.giphy.com/v1/gifs/"
 
     if args.mode == "id":
-        url += quote(args.topic)
+        url += urllib.parse.quote(args.topic)
         url += "?%s" % urlencode({"api_key": api_key})
     elif args.mode == "random":
         url += "random?%s" % urlencode({"api_key": api_key, "tag": args.topic})
@@ -200,7 +202,7 @@ def choose_image(args):
     if args.max_rating is not None:
         url += "&rating=" + args.max_rating
 
-    response = json.load(urlopen(url))
+    response = json.load(open_url(url))
     data = response["data"]
 
     if args.mode == "random":
@@ -225,7 +227,8 @@ def download_image(url):
     """
     Downloads a GIF, returning its raw image data.
     """
-    return urlopen(url).read()
+    response = open_url(url)
+    return response.read()
 
 
 def load_image(image_id, url):
@@ -253,7 +256,7 @@ def load_image(image_id, url):
             raise  # An error other than file-doesn't-exist occurred; bubble it up
 
         # GIF not cached yet, download it
-        image_data = urlopen(url).read()
+        image_data = download_image(url)
 
         with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
             temp_path = temp_file.name
@@ -276,6 +279,18 @@ def load_image(image_id, url):
             clean_cache(cache_dir)
 
         return image_data
+
+
+def open_url(url):
+    """
+    Opens a URL with urllib, and returns the http.client.HTTPResponse object.
+    """
+    if platform.system() == "Darwin" and platform.release().startswith("20."):
+        # Skip SSL cert validation on macOS Big Sur
+        context = ssl._create_unverified_context()
+        return urllib.request.urlopen(url, context=context)
+    else:
+        return urllib.request.urlopen(url)
 
 
 def display_image(image_b64, image_name, width):
