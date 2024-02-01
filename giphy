@@ -33,7 +33,7 @@ def main():
     """
     args = parse_command_line()
 
-    incapable = check_image_capability()
+    incapable = check_image_capability(args)
     if incapable is not None:
         display_error(args, incapable)
 
@@ -72,6 +72,8 @@ def parse_command_line():
                         help="Show this help message and exit")
     parser.add_argument("-b", "--bare", action="store_true",
                         help="Display bare GIFs, without their URLs")
+    parser.add_argument("-f", "--force", action="store_true",
+                        help="Attempt to display a GIF, even if it may not be supported in this terminal")
     parser.add_argument("--mode", default="best", choices=["best", "random", "id"],
                         help="How Giphy will choose a GIF: the best topical match it can find, using its special sauce"
                         " algorithm; a random topical match; or a specific image selected by ID (default = 'best')")
@@ -103,8 +105,11 @@ def parse_command_line():
         parser.print_help()
         sys.stdout.write("\nSource: https://github.com/jakshin/giphizer\n\n")
         sys.stdout.write("All images displayed are from Giphy (https://giphy.com),\n"
-                         "but this program has no official connection with Giphy.\n\n")
-        display_logo(True)
+                         "but this program has no official connection with Giphy.\n")
+
+        if check_image_capability(args) is None:
+            sys.stdout.write("\n")
+            display_logo(True)
         exit(0)
 
     return args
@@ -147,7 +152,7 @@ def display_error(args, err_msg):
         exit(1)
 
 
-def check_image_capability():
+def check_image_capability(args):
     """
     Checks whether the current environment supports displaying images properly. First, iTerm is required.
     Second, we shouldn't be running under tmux or GNU screen; tmux can display some images, but fails on some GIFs,
@@ -155,6 +160,9 @@ def check_image_capability():
     GNU screen doesn't pass the escape sequences through to iTerm, so big gobs of Base64 data get displayed
     instead of an image.
     """
+    if args.force:
+        return None
+
     if os.environ.get("ITERM_PROFILE") is None:
         # It doesn't look like we're running under iTerm
         return "GIFs can only be displayed in iTerm"
@@ -271,9 +279,8 @@ def load_image(image_id, url):
 
 def display_image(image_b64, image_name, width):
     """
-    Displays a GIF by printing it to the terminal using iTerm-specific escape sequences.
-    This should not be called when not running under iTerm, or when running under tmux or GNU screen
-    (see check_image_capability() for details).
+    Displays a GIF by printing it to the terminal using iTerm's leet escape sequences.
+    Call check_image_capability() first.
     """
     open_esc = "\033]"  # "\033Ptmux;\033\033]" under tmux
     close_esc = "\a"    # "\a\033\\" under tmux
@@ -289,11 +296,8 @@ def display_image(image_b64, image_name, width):
 def display_logo(large):
     """
     Displays a Giphy logo image.
-    Nothing is displayed under tmux or GNU screen, or when not running under iTerm.
+    Call check_image_capability() first.
     """
-    if check_image_capability() is not None:
-        return
-
     # Images from https://support.giphy.com/hc/en-us/articles/360022283772-GIPHY-Brand-Guidelines
     if large:
         # base64 --break=100 -i Poweredby_640px-Black_VertLogo.png | pbcopy
