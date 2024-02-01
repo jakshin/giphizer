@@ -21,12 +21,12 @@ import re
 import ssl
 import sys
 import tempfile
-import urllib.error, urllib.parse, urllib.request
+import urllib.error
+import urllib.parse
+import urllib.request
 from base64 import b64encode
 from os import path
 from urllib.parse import urlencode
-
-MAX_CACHED_GIFS = 1000           # Adjust freely; set to 0 to disable caching
 
 
 def main():
@@ -43,8 +43,10 @@ def main():
     if image_info.get("error") is not None:
         display_error(args, image_info["error"])
 
-    if MAX_CACHED_GIFS > 0:
-        image_data = load_image(image_info["id"], image_info["url"])
+    cache_dir = path.expanduser("~/Library/Caches/Giphizer")
+
+    if args.max_cache > 0:
+        image_data = load_image(cache_dir, image_info["id"], image_info["url"])
     else:
         image_data = download_image(image_info["url"])
 
@@ -54,6 +56,8 @@ def main():
     if args.show_url:
         print(image_info["page"])
     display_logo(False)
+
+    clean_cache(args, cache_dir)
 
 
 def parse_command_line():
@@ -72,14 +76,19 @@ def parse_command_line():
                         help="The word, phrase or ID that determines which GIF to show")
     parser.add_argument("-h", "--help", action="store_true",
                         help="Show this help message and exit")
-    parser.add_argument("-f", "--force", action="store_true",
-                        help="Attempt to display a GIF, even if it may not be supported in this terminal")
+
     parser.add_argument("--mode", default="best", choices=["best", "random", "id"],
                         help="How Giphy will choose a GIF: the best topical match it can find, "
                         "using its special sauce algorithm; a random topical match; "
                         "or a specific image selected by ID (default = 'best')")
     parser.add_argument("--max-rating", choices=["y", "g", "pg", "pg-13", "r"],
                         help="Maximum maturity rating (default = no limit, i.e. use any GIF)")
+
+    parser.add_argument("--max-cache", type=int, metavar="num", default=100,
+                        help="Maximum number of GIFs to retain in a local disk cache "
+                        "(default = 100, use 0 to disable caching)")
+    parser.add_argument("-f", "--force", action="store_true",
+                        help="Attempt to display a GIF, even if it may not be supported in this terminal")
     parser.add_argument("-q", "--quiet", action="store_true",
                         help="Suppress error messages (except crash-level problems)")
     parser.add_argument("--show-url", action="store_true",
@@ -91,6 +100,9 @@ def parse_command_line():
 
     # Read options from the command line
     parser.parse_args(namespace=args)
+
+    if args.max_cache < 0:
+        args.max_cache = 0
 
     # Massage the topic/ID received into a single trimmed string
     topic = []
@@ -231,13 +243,12 @@ def download_image(url):
     return response.read()
 
 
-def load_image(image_id, url):
+def load_image(cache_dir, image_id, url):
     """
     Loads a GIF from cache, first downloading it if needed. Returns the GIF's raw image data.
     Some attempts are made to prevent concurrently-executing instances of this program from stomping on
     each other's use of cache, but concurrent interactions haven't been thoroughly tested.
     """
-    cache_dir = path.expanduser("~/Library/Caches/Giphizer")
     cache_path = path.join(cache_dir, image_id + ".gif")
 
     try:
@@ -255,30 +266,27 @@ def load_image(image_id, url):
         if ex.errno != errno.ENOENT:
             raise  # An error other than file-doesn't-exist occurred; bubble it up
 
-        # GIF not cached yet, download it
-        image_data = download_image(url)
+    # GIF not cached yet, download it
+    image_data = download_image(url)
 
-        with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
-            temp_path = temp_file.name
-            temp_file.write(image_data)
-            temp_file.flush()
-            fsync(temp_file.fileno())
+    with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
+        temp_path = temp_file.name
+        temp_file.write(image_data)
+        temp_file.flush()
+        fsync(temp_file.fileno())
 
-        if temp_path is not None:
-            try:
-                os.rename(temp_path, cache_path)  # Atomic operation
-            except OSError:
-                # If caching is broken, the program can still work, albeit more slowly,
-                # so let's just try to clean up our temp file, then silently continue
-                try:
-                    os.remove(temp_path)
-                except OSError:
-                    pass  # Oh, well
+    try:
+        os.replace(temp_path, cache_path)  # Atomic operation
+        fsync_dir(cache_dir)
+    except OSError:
+        # If caching is broken, the program can still work, albeit more slowly,
+        # so let's just try to clean up our temp file, then silently continue
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass  # Oh, well
 
-            fsync_dir(cache_dir)
-            clean_cache(cache_dir)
-
-        return image_data
+    return image_data
 
 
 def open_url(url):
@@ -287,6 +295,7 @@ def open_url(url):
     """
     if platform.system() == "Darwin" and platform.release().startswith("20."):
         # Skip SSL cert validation on macOS Big Sur
+        # noinspection PyProtectedMember
         context = ssl._create_unverified_context()
         return urllib.request.urlopen(url, context=context)
     else:
@@ -477,31 +486,32 @@ def display_logo(large):
     display_image(logo_b64, "Powered-by-Giphy.png", width)
 
 
-def clean_cache(cache_dir_path):
+def clean_cache(args, cache_dir):
     """
     Cleans the cache by removing old files, based on last access time,
-    until there are at most MAX_CACHED_GIFS files left in the directory.
+    until there are at most max_cache files left in the directory.
     If we've somehow messed up in load_image() and left temp files in the cache directory,
     they are handled here just like GIFs, i.e. as part of the cache which may be aged out.
     """
+    if not path.isdir(cache_dir):
+        return  # Nothing to do
+
     cwd = os.getcwd()
 
     try:
-        os.chdir(cache_dir_path)
-        files = sorted(os.listdir(cache_dir_path), key=path.getatime)
-        delete = len(files) - MAX_CACHED_GIFS
+        os.chdir(cache_dir)
+        files = sorted(os.listdir(cache_dir), key=path.getatime)
+        delete = len(files) - args.max_cache
 
         for i in range(0, delete):
             try:
                 # Attempt to perform atomic delete in a way which won't break with concurrent program runs
                 file_name = files[i]
-                with tempfile.NamedTemporaryFile(delete=True, dir=cache_dir_path, suffix=".trash") as temp_file:
-                    cache_path = path.join(cache_dir_path, file_name)
-                    os.rename(cache_path, temp_file.name)
+                cache_path = path.join(cache_dir, file_name)
+                os.remove(cache_path)
             except OSError as ex:
                 if ex.errno != errno.ENOENT:
                     raise  # An error other than file-doesn't-exist occurred; bubble it up
-
     finally:
         os.chdir(cwd)
 
