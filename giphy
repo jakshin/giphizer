@@ -37,11 +37,11 @@ def main():
 
     incapable = check_image_capability(args)
     if incapable is not None:
-        display_error(args, incapable)
+        display_error(incapable)
 
     image_info = choose_image(args)
     if image_info.get("error") is not None:
-        display_error(args, image_info["error"])
+        display_error(image_info["error"])
 
     cache_dir = path.expanduser("~/Library/Caches/Giphizer")
 
@@ -89,8 +89,6 @@ def parse_command_line():
                         "(default = 100, use 0 to disable caching)")
     parser.add_argument("-f", "--force", action="store_true",
                         help="Attempt to display a GIF, even if it may not be supported in this terminal")
-    parser.add_argument("-q", "--quiet", action="store_true",
-                        help="Suppress error messages (except crash-level problems)")
     parser.add_argument("--show-url", action="store_true",
                         help="Show the GIF's URL just below it in the terminal")
 
@@ -155,16 +153,12 @@ def read_options_from_file(options_path):
     return all_args
 
 
-def display_error(args, err_msg):
+def display_error(err_msg):
     """
-    Displays the given error message and exits with an error code,
-    unless --quiet was passed, in which case it just silently exits.
+    Displays the given error message and exits with an error code.
     """
-    if args.quiet:
-        exit(0)
-    else:
-        sys.stderr.write("error: %s\n" % err_msg)
-        exit(1)
+    sys.stderr.write("error: %s\n" % err_msg)
+    exit(1)
 
 
 def check_image_capability(args):
