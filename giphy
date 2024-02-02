@@ -224,13 +224,12 @@ def choose_image(args):
             "size":      int(image["size"]),
         }
     except urllib.error.URLError as ex:
-        print(type(ex.reason)) # FIXME testing
         if isinstance(ex, urllib.error.HTTPError):
             if ex.code == 404 and args.mode == "id":
                 fail("Giphy couldn't find the image; is the ID incorrect?")
             else:
                 fail(get_giphy_api_err_msg(ex.code))
-        elif not test_internet_connection():
+        elif isinstance(ex.reason, socket.gaierror) and not test_internet_connection():
             fail("Couldn't contact Giphy's API; is the internet connection down?")
         else:
             fail("Problem using Giphy's API: %s" % str(ex.reason))
