@@ -224,6 +224,7 @@ def choose_image(args):
             "size":      int(image["size"]),
         }
     except urllib.error.URLError as ex:
+        print(type(ex.reason)) # FIXME testing
         if isinstance(ex, urllib.error.HTTPError):
             if ex.code == 404 and args.mode == "id":
                 fail("Giphy couldn't find the image; is the ID incorrect?")
@@ -265,7 +266,7 @@ def get_giphy_api_err_msg(response_code):
 
 def test_internet_connection():
     """
-    Reports whether we're connected to the internet. That concept is nuanced,
+    Reports whether we're connected to the internet. That's a nuanced concept,
     and this can report a value that's probably "wrong" in various cases,
     but we only use it to customize an error message anyway.
     See https://stackoverflow.com/a/20913928 for more details.
@@ -274,11 +275,9 @@ def test_internet_connection():
 
     # noinspection PyBroadException
     try:
-        print(socket.getdefaulttimeout())
         sock = socket.create_connection(("1.1.1.1", 80), timeout=3)
         connected = True
         sock.close()  # Can raise OSError
-        return True
     except Exception:
         pass
 
