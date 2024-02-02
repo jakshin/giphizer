@@ -116,12 +116,12 @@ def parse_command_line():
         os.environ["COLUMNS"] = "100" if columns > 100 else str(columns)
 
         parser.print_help()
-        sys.stdout.write("\nSource: https://github.com/jakshin/giphizer\n\n")
-        sys.stdout.write("All images displayed are from Giphy (https://giphy.com),\n"
-                         "but this program has no official connection with Giphy.\n")
+        print("\nSource: https://github.com/jakshin/giphizer\n")
+        print("All images displayed are from Giphy (https://giphy.com),\n"
+              "but this program has no official connection with Giphy.")
 
         if check_image_capability(args) is None:
-            sys.stdout.write("\n")
+            print()
             display_logo(True)
         sys.exit(0)
 
@@ -366,6 +366,9 @@ def display_image(image_b64, image_name, width):
     width = "width=%s;" % width if width is not None else ""
     inline = "inline=1"
 
+    # print() appends a newline, so any text following the image will go to the next line;
+    # sys.stdout.write() doesn't append a newline; iTerm handles this by bottom-aligning the tex
+    # with the bottom of the image, not sure about other terminals (or if they can handle it at all)
     print("%s1337;File=%s%s%s:%s%s" % (open_esc, name, width, inline, image_b64, close_esc))
 
 
