@@ -18,6 +18,7 @@ import json
 import os
 import platform
 import re
+import socket
 import ssl
 import sys
 import tempfile
@@ -228,6 +229,8 @@ def choose_image(args):
                 fail("Giphy couldn't find the image; is the ID incorrect?")
             else:
                 fail(get_giphy_api_err_msg(ex.code))
+        elif not test_internet_connection():
+            fail("Couldn't contact Giphy's API; is the internet connection down?")
         else:
             fail("Problem using Giphy's API: %s" % str(ex.reason))
     except json.JSONDecodeError as ex:
@@ -237,11 +240,14 @@ def choose_image(args):
 
 
 def get_giphy_api_err_msg(response_code):
+    """
+    Returns an error message for the given HTTP response code from Giphy's API,
+    based on this: https://developers.giphy.com/docs/api#response-codes
+    """
     if response_code >= 500:
         return "Giphy is experiencing problems right now (code %s)" % response_code
 
     err_msg = {
-        # From https://developers.giphy.com/docs/api#response-codes
         # 404 is handled specially because it can mean something different for id vs translate/random
         400: "Giphy API request was formatted incorrectly or missing a required parameter",
         401: "Giphy API key is missing or invalid",
@@ -255,6 +261,28 @@ def get_giphy_api_err_msg(response_code):
         return err_msg
 
     return "Giphy API request failed, sorry (code %s)" % response_code
+
+
+def test_internet_connection():
+    """
+    Reports whether we're connected to the internet. That concept is nuanced,
+    and this can report a value that's probably "wrong" in various cases,
+    but we only use it to customize an error message anyway.
+    See https://stackoverflow.com/a/20913928 for more details.
+    """
+    connected = False  # Pessimism
+
+    # noinspection PyBroadException
+    try:
+        print(socket.getdefaulttimeout())
+        sock = socket.create_connection(("1.1.1.1", 80), timeout=3)
+        connected = True
+        sock.close()  # Can raise OSError
+        return True
+    except Exception:
+        pass
+
+    return connected
 
 
 def download_image(image_url):
