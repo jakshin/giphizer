@@ -37,24 +37,23 @@ def main():
 
     incapable = check_image_capability(args)
     if incapable is not None:
-        display_error(incapable)
+        fail(incapable)
 
     image_info = choose_image(args)
-    if image_info.get("error") is not None:
-        display_error(image_info["error"])
+    image_url = image_info["image_url"]
 
     cache_dir = path.expanduser("~/Library/Caches/Giphizer")
 
     if args.max_cache > 0:
-        image_data = load_image(cache_dir, image_info["id"], image_info["url"])
+        image_data = load_image(image_url, image_info["id"], cache_dir)
     else:
-        image_data = download_image(image_info["url"])
+        image_data = download_image(image_url)
 
     image_b64 = b64encode(image_data).decode("utf-8")
-    display_image(image_b64, image_info["url"], None)
+    display_image(image_b64, image_url, None)
 
     if args.show_url:
-        print(image_info["page"])
+        print(image_info["page_url"])
     display_logo(False)
 
     clean_cache(args, cache_dir)
@@ -123,7 +122,7 @@ def parse_command_line():
         if check_image_capability(args) is None:
             sys.stdout.write("\n")
             display_logo(True)
-        exit(0)
+        sys.exit(0)
 
     return args
 
@@ -153,12 +152,12 @@ def read_options_from_file(options_path):
     return all_args
 
 
-def display_error(err_msg):
+def fail(err_msg):
     """
     Displays the given error message and exits with an error code.
     """
     sys.stderr.write("error: %s\n" % err_msg)
-    exit(1)
+    sys.exit(1)
 
 
 def check_image_capability(args):
@@ -192,7 +191,7 @@ def choose_image(args):
     """
     api_key = os.environ.get("GIPHY_API_KEY")
     if api_key is None:
-        return {"error": "No API key provided in the $GIPHY_API_KEY environment variable"}
+        fail("No API key provided in the $GIPHY_API_KEY environment variable")
 
     url = "https://api.giphy.com/v1/gifs/"
 
@@ -208,36 +207,69 @@ def choose_image(args):
     if args.max_rating is not None:
         url += "&rating=" + args.max_rating
 
-    response = json.load(open_url(url))
-    data = response["data"]
+    try:
+        response = json.load(open_url(url))
+        data = response["data"]
 
-    if args.mode == "random":
-        return {"id":     data["id"],
-                "page":   data["url"],
-                "url":    data["image_url"],
-                "width":  int(data["image_width"]),
-                "height": int(data["image_height"])}
-    else:
-        # Endpoint is 'translate' or 'id'
-        original = data["images"]["original"]
-        return {"id":     data["id"],
-                "page":   data["url"],
-                "url":    original["url"],
-                "width":  int(original["width"]),
-                "height": int(original["height"]),
-                "size":   int(original["size"]),
-                "rating": data["rating"]}
+        image = data["images"]["original"]
+        return {
+            "id":        data["id"],
+            "page_url":  data["url"],
+            "rating":    data["rating"],
+            "username":  data["username"],  # Can be an empty string
+            "image_url": image["url"],
+            "width":     int(image["width"]),
+            "height":    int(image["height"]),
+            "size":      int(image["size"]),
+        }
+    except urllib.error.URLError as ex:
+        if isinstance(ex, urllib.error.HTTPError):
+            if ex.code == 404 and args.mode == "id":
+                fail("Giphy couldn't find the image; is the ID incorrect?")
+            else:
+                fail(get_giphy_api_err_msg(ex.code))
+        else:
+            fail("Problem using Giphy's API: %s" % str(ex.reason))
+    except json.JSONDecodeError as ex:
+        fail("Unexpected response from Giphy (JSON error: %s)" % ex.msg)
+    except KeyError as ex:
+        fail("Unexpected response from Giphy (missing key: %s)" % ex.args[0])
 
 
-def download_image(url):
+def get_giphy_api_err_msg(response_code):
+    if response_code >= 500:
+        return "Giphy is experiencing problems right now (code %s)" % response_code
+
+    err_msg = {
+        # From https://developers.giphy.com/docs/api#response-codes
+        # 404 is handled specially because it can mean something different for id vs translate/random
+        400: "Giphy API request was formatted incorrectly or missing a required parameter",
+        401: "Giphy API key is missing or invalid",
+        403: "Giphy API request wasn't authorized; probably an API key problem",
+        414: "Topic was too long, try again with a shorter phrase",
+        429: "Too many requests, rate limit exceeded, try again later",
+    }.get(response_code)
+
+    if err_msg:
+        err_msg += " (code %s)" % response_code
+        return err_msg
+
+    return "Giphy API request failed, sorry (code %s)" % response_code
+
+
+def download_image(image_url):
     """
     Downloads a GIF, returning its raw image data.
     """
-    response = open_url(url)
-    return response.read()
+    try:
+        return open_url(image_url).read()
+    except urllib.error.HTTPError as ex:
+        fail("Problem downloading GIF (HTTP response code %s)" % ex.code)
+    except urllib.error.URLError as ex:
+        fail("Problem downloading GIF: %s" % str(ex.reason))
 
 
-def load_image(cache_dir, image_id, url):
+def load_image(image_url, image_id, cache_dir):
     """
     Loads a GIF from cache, first downloading it if needed. Returns the GIF's raw image data.
     Some attempts are made to prevent concurrently-executing instances of this program from stomping on
@@ -261,7 +293,7 @@ def load_image(cache_dir, image_id, url):
             raise  # An error other than file-doesn't-exist occurred; bubble it up
 
     # GIF not cached yet, download it
-    image_data = download_image(url)
+    image_data = download_image(image_url)
 
     with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
         temp_path = temp_file.name
@@ -309,7 +341,6 @@ def display_image(image_b64, image_name, width):
     inline = "inline=1"
 
     print("%s1337;File=%s%s%s:%s%s" % (open_esc, name, width, inline, image_b64, close_esc))
-    return True
 
 
 def display_logo(large):
