@@ -18,6 +18,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import socket
 import ssl
 import sys
@@ -112,8 +113,9 @@ def parse_command_line():
 
     # Display help/usage info and exit, if needed
     if args.topic == "" or args.help:
-        columns = int(os.environ["COLUMNS"])
-        os.environ["COLUMNS"] = "100" if columns > 100 else str(columns)
+        columns = int(shutil.get_terminal_size().columns)
+        if columns > 100:
+            os.environ["COLUMNS"] = "100"
 
         parser.print_help()
         print("\nSource: https://github.com/jakshin/giphizer\n")
