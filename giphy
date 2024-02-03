@@ -43,8 +43,7 @@ def main():
 
     image_info = choose_image(args)
     image_url = image_info["image_url"]
-
-    cache_dir = path.expanduser("~/Library/Caches/Giphizer")
+    cache_dir = get_cache_dir()
 
     if args.max_cache > 0:
         image_data = load_image(image_url, image_info["id"], cache_dir)
@@ -87,17 +86,14 @@ def parse_command_line():
 
     parser.add_argument("--max-cache", type=int, metavar="num", default=100,
                         help="Maximum number of GIFs to retain in a local disk cache "
-                        "(default = 100, use 0 to disable caching)")
+                        "(default = 100, use 0 to disable caching and clear any existing cache)")
     parser.add_argument("-f", "--force", action="store_true",
                         help="Attempt to display a GIF, even if it may not be supported in this terminal")
     parser.add_argument("--show-url", action="store_true",
                         help="Show the GIF's URL just below it in the terminal")
 
-    # Try to read options from our dotfile
-    dot_file_opts = read_options_from_file("~/.giphyrc")
-    args = parser.parse_args(dot_file_opts)
-
-    # Read options from the command line
+    # Try to get options from our dotfile, then from the command line
+    args = parser.parse_args(read_options_from_dotfile())
     parser.parse_args(namespace=args)
 
     if args.max_cache < 0:
@@ -130,27 +126,36 @@ def parse_command_line():
     return args
 
 
-def read_options_from_file(options_path):
+def read_options_from_dotfile():
     """
-    Reads options from a file, if it exists, returning an array of strings.
+    Reads options from the first of our dotfiles that exists, returning an array of strings.
     Lines beginning with hash characters are ignored, so they can serve as comments in the file.
     """
     all_args = []
 
-    try:
-        with open(path.expanduser(options_path), "r") as option_file:
-            lines = option_file.readlines()
+    dotfiles = ["~/.giphyrc"]
+    config_home = os.environ.get("XDG_CONFIG_HOME")
+    if config_home is not None and config_home.startswith("/"):
+        dotfiles.append("%s/giphy/giphyrc" % config_home)
+    else:
+        dotfiles.append("~/.config/giphy/giphyrc")
 
-        for line in lines:
-            line = line.strip()
-            if line == "" or line[0] == "#":
-                continue
+    for dotfile in dotfiles:
+        try:
+            with open(path.expanduser(dotfile), "r") as option_file:
+                lines = option_file.readlines()
 
-            args = line.split()
-            all_args += args
-    except IOError as ex:
-        if ex.errno != errno.ENOENT:
-            raise  # It's fine for the file not to exist, but any other error is bad
+            for line in lines:
+                line = line.strip()
+                if line != "" and line[0] != "#":
+                    args = line.split()
+                    all_args.extend(args)
+
+            # Only read one dotfile
+            break
+        except IOError as ex:
+            if ex.errno != errno.ENOENT:
+                raise  # It's fine for the file not to exist, but any other error is bad
 
     return all_args
 
@@ -185,6 +190,28 @@ def check_image_capability(args):
         return "GIFs can't be displayed in tmux or GNU screen"
 
     return None  # No problems detected
+
+
+def get_cache_dir():
+    """
+    Returns the cache directory's path, respecting $XDG_CACHE_HOME if present,
+    using per-environment conventions if not.
+    https://wiki.archlinux.org/title/XDG_Base_Directory#Specification
+    """
+    cache_home = os.environ.get("XDG_CACHE_HOME")
+    if cache_home is not None and cache_home.startswith("/"):
+        return "%s/giphizer" % cache_home
+
+    cache_dir = "~/.cache/giphizer"  # Default
+    if platform.system() == "Darwin":
+        cache_dir = "~/Library/Caches/Giphizer"
+    elif platform.system() == "Windows":
+        # Doesn't include Cygwin (like "CYGWIN_NT-10.0-22000") or WSL ("Linux")
+        app_data = os.environ.get("LOCALAPPDATA")
+        if app_data is not None and app_data != "":
+            cache_dir = "%s\\%s" % (app_data, "Giphizer\\cache")
+
+    return path.expanduser(cache_dir)
 
 
 def choose_image(args):
