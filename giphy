@@ -83,6 +83,8 @@ def parse_command_line():
                         "or a specific image selected by ID (default = 'best')")
     parser.add_argument("--max-rating", choices=["y", "g", "pg", "pg-13", "r"],
                         help="Maximum maturity rating (default = no limit, i.e. use any GIF)")
+    parser.add_argument("--max-size", choices=["2MB", "5MB", "8MB", "none"],
+                        help="Maximum image size in megabytes (default = no limit)")
 
     parser.add_argument("--max-cache", type=int, metavar="num", default=100,
                         help="Maximum number of GIFs to retain in a local disk cache "
@@ -280,6 +282,16 @@ def choose_image(args):
         data = response["data"]
 
         image = data["images"]["original"]
+        try:
+            if args.max_size == "2MB":
+                image = data["images"]["downsized-xxx"]
+            elif args.max_size == "5MB":
+                image = data["images"]["downsized_medium"]
+            elif args.max_size == "8MB":
+                image = data["images"]["downsized_large"]
+        except KeyError:
+            pass
+
         return {
             "id":        data["id"],
             "page_url":  data["url"],
