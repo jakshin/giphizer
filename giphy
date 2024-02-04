@@ -71,7 +71,9 @@ def parse_command_line():
                                                  "phrase you enter. The 'id' mode attempts to select a specific GIF, "
                                                  "using its unique ID. "
                                                  "iTerm is needed, and images aren't displayed in tmux or GNU screen.",
-                                     add_help=False)
+                                     add_help=False,
+                                     allow_abbrev=False,
+                                     exit_on_error=False)
     parser.add_argument("topic", nargs="*",
                         help="The word, phrase or ID that determines which GIF to show")
     parser.add_argument("-h", "--help", action="store_true",
@@ -92,9 +94,33 @@ def parse_command_line():
     parser.add_argument("--show-url", action="store_true",
                         help="Show the GIF's URL just below it in the terminal")
 
-    # Try to get options from our dotfile, then from the command line
-    args = parser.parse_args(read_options_from_dotfile())
-    parser.parse_args(namespace=args)
+    # Try to get options from our dotfile, then from the command line;
+    # ArgumentParser's exit_on_error only kind of works, so we make some checks manually:
+    # https://github.com/python/cpython/issues/103498
+    context = ""
+    try:
+        def check_unknowns():
+            if len(unknowns) == 1:
+                raise argparse.ArgumentError(None, "unknown option: %s" % unknowns[0])
+            elif len(unknowns) > 0:
+                raise argparse.ArgumentError(None, "unknown options: %s" % ", ".join(unknowns))
+
+        dotfile_argv, dotfile = read_options_from_dotfile()
+        context = " in " + dotfile
+        args, unknowns = parser.parse_known_args(dotfile_argv)
+        check_unknowns()
+
+        args.topic = []  # Ignore some stuff in the dotfile
+        args.help = False
+
+        context = " on command line"
+        _, unknowns = parser.parse_known_args(namespace=args)
+        check_unknowns()
+    except argparse.ArgumentError as ex:
+        option_str = " %s option:" % ex.argument_name if ex.argument_name is not None else ""
+        sys.stderr.write("Error%s:%s %s\n" % (context, option_str, ex.message))
+        sys.stderr.write("For usage information, run: giphy --help\n")
+        sys.exit(1)
 
     if args.max_cache < 0:
         args.max_cache = 0
@@ -128,23 +154,33 @@ def parse_command_line():
 
 def read_options_from_dotfile():
     """
-    Reads options from the first of our dotfiles that exists, returning an array of strings.
+    Reads options from the first of our dotfiles that exists, returning an array of strings,
+    and the dotfile's "pretty path" (where $HOME is represented by "~" instead of its actual path).
     Lines beginning with hash characters are ignored, so they can serve as comments in the file.
     """
-    all_args = []
-
     dotfiles = ["~/.giphyrc"]
     config_home = os.environ.get("XDG_CONFIG_HOME")
     if config_home is not None and config_home.startswith("/"):
+        home = os.environ.get("HOME")
+        if home is not None and home != "":
+            if not home.endswith("/"):
+                home += "/"
+            if config_home.startswith(home):
+                config_home = config_home.replace(home, "~/")
         dotfiles.append("%s/giphy/giphyrc" % config_home)
     else:
         dotfiles.append("~/.config/giphy/giphyrc")
 
     for dotfile in dotfiles:
+        dotfile_path = path.expanduser(dotfile)
+        if not path.isfile(dotfile_path):
+            continue  # Because what if it's actually a symlink to /dev/zero? :)
+
         try:
-            with open(path.expanduser(dotfile), "r") as option_file:
+            with open(dotfile_path, "r") as option_file:
                 lines = option_file.readlines()
 
+            all_args = []
             for line in lines:
                 line = line.strip()
                 if line != "" and line[0] != "#":
@@ -152,19 +188,19 @@ def read_options_from_dotfile():
                     all_args.extend(args)
 
             # Only read one dotfile
-            break
-        except IOError as ex:
-            if ex.errno != errno.ENOENT:
-                raise  # It's fine for the file not to exist, but any other error is bad
+            return all_args, dotfile
+        except (FileNotFoundError, IsADirectoryError, PermissionError):
+            pass
 
-    return all_args
+    # Couldn't find our dotfile anywhere
+    return [], None
 
 
 def fail(err_msg):
     """
     Displays the given error message and exits with an error code.
     """
-    sys.stderr.write("error: %s\n" % err_msg)
+    sys.stderr.write("Error: %s\n" % err_msg)
     sys.exit(1)
 
 
@@ -343,7 +379,7 @@ def load_image(image_url, image_id, cache_dir):
         with open(cache_path, "rb") as cache_file:
             # GIF already cached
             return cache_file.read()
-    except IOError as ex:
+    except OSError as ex:
         if ex.errno != errno.ENOENT:
             raise  # An error other than file-doesn't-exist occurred; bubble it up
 
