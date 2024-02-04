@@ -106,19 +106,19 @@ def parse_command_line():
                 raise argparse.ArgumentError(None, "unknown options: %s" % ", ".join(unknowns))
 
         dotfile_argv, dotfile = read_options_from_dotfile()
-        context = " in " + dotfile
+        context = "in " + dotfile
         args, unknowns = parser.parse_known_args(dotfile_argv)
         check_unknowns()
 
         args.topic = []  # Ignore some stuff in the dotfile
         args.help = False
 
-        context = " on command line"
+        context = "on command line"
         _, unknowns = parser.parse_known_args(namespace=args)
         check_unknowns()
     except argparse.ArgumentError as ex:
         option_str = " %s option:" % ex.argument_name if ex.argument_name is not None else ""
-        sys.stderr.write("Error%s:%s %s\n" % (context, option_str, ex.message))
+        sys.stderr.write("Error %s:%s %s\n" % (context, option_str, ex.message))
         sys.stderr.write("For usage information, run: giphy --help\n")
         sys.exit(1)
 
