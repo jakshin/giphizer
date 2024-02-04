@@ -65,15 +65,13 @@ def parse_command_line():
     Parses command-line options, returning a Namespace. Displays usage/error and exits
     if there are any problems with the command line, or if the user requested help.
     """
-    parser = argparse.ArgumentParser(usage="%(prog)s [options] topic",
-                                     description="Displays a Giphy GIF in your terminal. "
-                                                 "The 'best' and 'random' modes select a GIF based on the word or "
-                                                 "phrase you enter. The 'id' mode attempts to select a specific GIF, "
-                                                 "using its unique ID. "
-                                                 "iTerm is needed, and images aren't displayed in tmux or GNU screen.",
-                                     add_help=False,
-                                     allow_abbrev=False,
-                                     exit_on_error=False)
+    parser = NoExitArgParser(usage="%(prog)s [options] topic",
+                             description="Displays a Giphy GIF in your terminal. "
+                                         "The 'best' and 'random' modes select a GIF based on the word or "
+                                         "phrase you enter. The 'id' mode attempts to select a specific GIF, "
+                                         "using its unique ID. "
+                                         "iTerm is needed, and images aren't displayed in tmux or GNU screen.",
+                             add_help=False)
     parser.add_argument("topic", nargs="*",
                         help="The word, phrase or ID that determines which GIF to show")
     parser.add_argument("-h", "--help", action="store_true",
@@ -94,31 +92,21 @@ def parse_command_line():
     parser.add_argument("--show-url", action="store_true",
                         help="Show the GIF's URL just below it in the terminal")
 
-    # Try to get options from our dotfile, then from the command line;
-    # ArgumentParser's exit_on_error only kind of works, so we make some checks manually:
-    # https://github.com/python/cpython/issues/103498
+    # Try to get options from our dotfile, then from the command line
     context = ""
-    try:
-        def check_unknowns():
-            if len(unknowns) == 1:
-                raise argparse.ArgumentError(None, "unknown option: %s" % unknowns[0])
-            elif len(unknowns) > 0:
-                raise argparse.ArgumentError(None, "unknown options: %s" % ", ".join(unknowns))
 
+    try:
         dotfile_argv, dotfile = read_options_from_dotfile()
-        context = "in " + dotfile
-        args, unknowns = parser.parse_known_args(dotfile_argv)
-        check_unknowns()
+        context = " in %s" % dotfile
+        args = parser.parse_args(dotfile_argv)
 
         args.topic = []  # Ignore some stuff in the dotfile
         args.help = False
 
-        context = "on command line"
-        _, unknowns = parser.parse_known_args(namespace=args)
-        check_unknowns()
+        context = ""
+        parser.parse_args(namespace=args)
     except argparse.ArgumentError as ex:
-        option_str = " %s option:" % ex.argument_name if ex.argument_name is not None else ""
-        sys.stderr.write("Error %s:%s %s\n" % (context, option_str, ex.message))
+        sys.stderr.write("Error%s: %s\n" % (context, str(ex)))
         sys.stderr.write("For usage information, run: giphy --help\n")
         sys.exit(1)
 
@@ -150,6 +138,20 @@ def parse_command_line():
         sys.exit(0)
 
     return args
+
+
+class NoExitArgParser(argparse.ArgumentParser):
+    """
+    Just like argparse.ArgumentParser, but throws ArgumentError instead of exiting.
+    Because exit_on_error is only in Python 3.9+, and doesn't work perfectly anyway:
+    https://github.com/python/cpython/issues/103498.
+    """
+    def exit(self, status=0, message=None):
+        if status:
+            raise argparse.ArgumentError(None, message)
+
+    def error(self, message):
+        raise argparse.ArgumentError(None, message)
 
 
 def read_options_from_dotfile():
