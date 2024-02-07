@@ -404,9 +404,8 @@ def display_image(image_b64, image_size, width, image_name):
         file_info += "width=%s;" % width
     file_info += "name=%s" % b64encode(image_name.encode("utf-8")).decode("utf-8")
 
-    # print() appends a newline, so any text following the image will go to the next line;
-    # sys.stdout.write() doesn't append a newline; iTerm handles this by bottom-aligning the tex
-    # with the bottom of the image, not sure about other terminals (or if they can handle it at all)
+    # if a newline isn't appended, iTerm bottom-aligns the text with the bottom of the image;
+    # not sure how other terminals handle it
     print("%s1337;File=%s:%s%s" % (open_esc, file_info, image_b64, close_esc))
 
 
