@@ -51,7 +51,7 @@ def main():
         image_data = download_image(image_url)
 
     image_b64 = b64encode(image_data).decode("utf-8")
-    display_image(image_b64, image_url, None)
+    display_image(image_b64, len(image_data), None, image_url)
 
     if args.show_url:
         print(image_info["page_url"])
@@ -433,7 +433,7 @@ def open_url(url):
         return urllib.request.urlopen(url)
 
 
-def display_image(image_b64, image_name, width):
+def display_image(image_b64, image_size, width, image_name):
     """
     Displays a GIF by printing it to the terminal using iTerm's leet escape sequences.
     Call check_image_capability() first.
@@ -441,14 +441,15 @@ def display_image(image_b64, image_name, width):
     open_esc = "\033]"  # "\033Ptmux;\033\033]" under tmux
     close_esc = "\a"    # "\a\033\\" under tmux
 
-    name = "name=%s;" % b64encode(image_name.encode("utf-8")).decode("utf-8")
-    width = "width=%s;" % width if width is not None else ""
-    inline = "inline=1"
+    file_info = "inline=1;size=%s;" % image_size
+    if width is not None:
+        file_info += "width=%s;" % width
+    file_info += "name=%s" % b64encode(image_name.encode("utf-8")).decode("utf-8")
 
     # print() appends a newline, so any text following the image will go to the next line;
     # sys.stdout.write() doesn't append a newline; iTerm handles this by bottom-aligning the tex
     # with the bottom of the image, not sure about other terminals (or if they can handle it at all)
-    print("%s1337;File=%s%s%s:%s%s" % (open_esc, name, width, inline, image_b64, close_esc))
+    print("%s1337;File=%s:%s%s" % (open_esc, file_info, image_b64, close_esc))
 
 
 def display_logo(large):
@@ -591,6 +592,7 @@ def display_logo(large):
             t1SC6dzFEkzhzlPNUk2VYD/fSe6/q2lyQggh5fA+EkgIIYQQQmoPF4YQQgghhNAJJIQQQgghdAIJIYQQQgidQEIIIYQQQieQEEII
             IYTQCSSEEEIIIXQCCSGEEEJIavl/AQYAXJ75qdzxDkYAAAAASUVORK5CYII=
             """.replace(' ', '')
+        logo_size = 9719
         width = "320px"
     else:
         # base64 --break=100 -i Poweredby_100px-Black_VertLogo.png | pbcopy
@@ -614,9 +616,10 @@ def display_logo(large):
             K+Thu4fqr3P76s/nvcbP1Q6z9qHyXvhd7V94rA438z1khyXZppB0K1naaQVZIY/eOq+e/p6xVoXwN2v/ialld5FrDiRHc0jAp0Qh
             J39BjPCpIRA+pdxFGItY4hzllMyJkGSrlN3a4ZOOLkjsowo85P1f1hksCs4UsmTwjwADAPfqw1QnSLBaAAAAAElFTkSuQmCC
             """.replace(' ', '')
+        logo_size = 1347
         width = None
 
-    display_image(logo_b64, "Powered-by-Giphy.png", width)
+    display_image(logo_b64, logo_size, width, "Powered-by-Giphy.png")
 
 
 def clean_cache(args, cache_dir):
