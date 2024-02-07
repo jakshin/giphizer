@@ -38,30 +38,56 @@ def main():
     """
     Main program logic.
     """
-    args = parse_command_line()
+    try:
+        args = parse_command_line()
+        if args is None:
+            return 0
 
-    incapable = check_image_capability(args)
-    if incapable is not None:
-        fail(incapable)
+        incapable = check_image_capability(args)
+        if incapable is not None:
+            fail(incapable)
 
-    image_info = choose_image(args)
-    image_url = image_info["image_url"]
-    cache_dir = get_cache_dir()
+        image_info = choose_image(args)
+        image_url = image_info["image_url"]
+        image_id = image_info["id"]
 
-    if args.max_cache > 0:
-        image_data = load_image(image_url, image_info["id"], cache_dir)
-    else:
-        image_data = download_image(image_url)
+        image_data = load_cached_image(image_id)
+        if image_data is None:
+            image_data = download_image(image_url)
+            if args.max_cache > 0:
+                cache_image(image_id, image_data)
 
-    image_b64 = b64encode(image_data).decode("utf-8")
-    display_image(image_b64, len(image_data), None, image_url)
+        image_b64 = b64encode(image_data).decode("utf-8")
+        display_image(image_b64, len(image_data), None, image_url)
 
-    if args.show_url:
-        print(image_info["page_url"])
-    display_logo(False)
+        if args.show_url:
+            print(image_info["page_url"])
+        display_logo(False)
 
-    clean_cache(args, cache_dir)
+        clean_cache(args)
+        return 0
 
+    except GiphizerException as ex:
+        err_msg = str(ex)
+        if err_msg:
+            sys.stderr.write("Error: %s\n" % str(ex))
+        return 1
+
+
+class GiphizerException(Exception):
+    """Represents failure and a need to exit immediately."""
+    pass
+
+
+def fail(err_msg):
+    """
+    Raises a GiphizerException with the given error message, which gets written to stderr,
+    and causes the script to exit with an error code.
+    """
+    raise GiphizerException(err_msg)
+
+
+# ----- Parsing options from our config file and command line -----
 
 def parse_command_line():
     """
@@ -113,7 +139,7 @@ def parse_command_line():
     except argparse.ArgumentError as ex:
         sys.stderr.write("Error%s: %s\n" % (context, str(ex)))
         sys.stderr.write("For usage information, run: giphy --help\n")
-        sys.exit(1)
+        raise GiphizerException
 
     if args.max_cache < 0:
         args.max_cache = 0
@@ -140,9 +166,10 @@ def parse_command_line():
         if check_image_capability(args) is None:
             print()
             display_logo(True)
-        sys.exit(0)
 
-    return args
+        return None
+    else:
+        return args
 
 
 class NoExitArgParser(argparse.ArgumentParser):
@@ -203,59 +230,7 @@ def read_options_from_dotfile():
     return [], None
 
 
-def fail(err_msg):
-    """
-    Displays the given error message and exits with an error code.
-    """
-    sys.stderr.write("Error: %s\n" % err_msg)
-    sys.exit(1)
-
-
-def check_image_capability(args):
-    """
-    Checks whether the current environment supports displaying images properly. First, iTerm is required.
-    Second, we shouldn't be running under tmux or GNU screen; tmux can display some images, but fails on some GIFs,
-    and doesn't move the cursor properly when it does work, leaving the prompt on top of the displayed image;
-    GNU screen doesn't pass the escape sequences through to iTerm, so big gobs of Base64 data get displayed
-    instead of an image.
-    """
-    if args.force:
-        return None
-
-    if os.environ.get("ITERM_PROFILE") is None:
-        # It doesn't look like we're running under iTerm
-        return "GIFs can only be displayed in iTerm"
-
-    term = os.environ.get("TERM")
-    if term is not None and term.startswith("screen"):
-        # GNU screen and tmux both set TERM to a string beginning with 'screen';
-        # GNU screen sets STY, tmux doesn't
-        return "GIFs can't be displayed in tmux or GNU screen"
-
-    return None  # No problems detected
-
-
-def get_cache_dir():
-    """
-    Returns the cache directory's path, respecting $XDG_CACHE_HOME if present,
-    using per-environment conventions if not.
-    https://wiki.archlinux.org/title/XDG_Base_Directory#Specification
-    """
-    cache_home = os.environ.get("XDG_CACHE_HOME")
-    if cache_home is not None and cache_home.startswith("/"):
-        return "%s/giphizer" % cache_home
-
-    cache_dir = "~/.cache/giphizer"  # Default
-    if platform.system() == "Darwin":
-        cache_dir = "~/Library/Caches/Giphizer"
-    elif platform.system() == "Windows":
-        # Doesn't include Cygwin (like "CYGWIN_NT-10.0-22000") or WSL ("Linux")
-        app_data = os.environ.get("LOCALAPPDATA")
-        if app_data is not None and app_data != "":
-            cache_dir = "%s\\%s" % (app_data, "Giphizer\\cache")
-
-    return path.expanduser(cache_dir)
-
+# ----- Using Giphy's API, downloading images -----
 
 def choose_image(args):
     """
@@ -345,6 +320,31 @@ def get_giphy_api_err_msg(response_code):
     return "Giphy API request failed, sorry (code %s)" % response_code
 
 
+def download_image(image_url):
+    """
+    Downloads a GIF, returning its raw image data.
+    """
+    try:
+        return open_url(image_url).read()
+    except urllib.error.HTTPError as ex:
+        fail("Problem downloading GIF (HTTP response code %s)" % ex.code)
+    except urllib.error.URLError as ex:
+        fail("Problem downloading GIF: %s" % str(ex.reason))
+
+
+def open_url(url):
+    """
+    Opens a URL with urllib, and returns the http.client.HTTPResponse object.
+    """
+    if platform.system() == "Darwin" and platform.release().startswith("20."):
+        # Skip SSL cert validation on macOS Big Sur
+        # noinspection PyProtectedMember
+        context = ssl._create_unverified_context()
+        return urllib.request.urlopen(url, context=context)
+    else:
+        return urllib.request.urlopen(url)
+
+
 def test_internet_connection():
     """
     Reports whether we're connected to the internet. That's a nuanced concept,
@@ -365,75 +365,30 @@ def test_internet_connection():
     return connected
 
 
-def download_image(image_url):
+# ----- Displaying images -----
+
+def check_image_capability(args):
     """
-    Downloads a GIF, returning its raw image data.
+    Checks whether the current environment supports displaying images properly. First, iTerm is required.
+    Second, we shouldn't be running under tmux or GNU screen; tmux can display some images, but fails on some GIFs,
+    and doesn't move the cursor properly when it does work, leaving the prompt on top of the displayed image;
+    GNU screen doesn't pass the escape sequences through to iTerm, so big gobs of Base64 data get displayed
+    instead of an image.
     """
-    try:
-        return open_url(image_url).read()
-    except urllib.error.HTTPError as ex:
-        fail("Problem downloading GIF (HTTP response code %s)" % ex.code)
-    except urllib.error.URLError as ex:
-        fail("Problem downloading GIF: %s" % str(ex.reason))
+    if args.force:
+        return None
 
+    if os.environ.get("ITERM_PROFILE") is None:
+        # It doesn't look like we're running under iTerm
+        return "GIFs can only be displayed in iTerm"
 
-def load_image(image_url, image_id, cache_dir):
-    """
-    Loads a GIF from cache, first downloading it if needed. Returns the GIF's raw image data.
-    Some attempts are made to prevent concurrently-executing instances of this program from stomping on
-    each other's use of cache, but concurrent interactions haven't been thoroughly tested.
-    """
-    cache_path = path.join(cache_dir, image_id + ".gif")
+    term = os.environ.get("TERM")
+    if term is not None and term.startswith("screen"):
+        # GNU screen and tmux both set TERM to a string beginning with 'screen';
+        # GNU screen sets STY, tmux doesn't
+        return "GIFs can't be displayed in tmux or GNU screen"
 
-    try:
-        # Ensure that the cache dir exists
-        os.makedirs(cache_dir)
-    except OSError:
-        if not path.isdir(cache_dir):
-            raise
-
-    try:
-        with open(cache_path, "rb") as cache_file:
-            # GIF already cached
-            return cache_file.read()
-    except OSError as ex:
-        if ex.errno != errno.ENOENT:
-            raise  # An error other than file-doesn't-exist occurred; bubble it up
-
-    # GIF not cached yet, download it
-    image_data = download_image(image_url)
-
-    with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
-        temp_path = temp_file.name
-        temp_file.write(image_data)
-        temp_file.flush()
-        fsync(temp_file.fileno())
-
-    try:
-        os.replace(temp_path, cache_path)  # Atomic operation
-        fsync_dir(cache_dir)
-    except OSError:
-        # If caching is broken, the program can still work, albeit more slowly,
-        # so let's just try to clean up our temp file, then silently continue
-        try:
-            os.remove(temp_path)
-        except OSError:
-            pass  # Oh, well
-
-    return image_data
-
-
-def open_url(url):
-    """
-    Opens a URL with urllib, and returns the http.client.HTTPResponse object.
-    """
-    if platform.system() == "Darwin" and platform.release().startswith("20."):
-        # Skip SSL cert validation on macOS Big Sur
-        # noinspection PyProtectedMember
-        context = ssl._create_unverified_context()
-        return urllib.request.urlopen(url, context=context)
-    else:
-        return urllib.request.urlopen(url)
+    return None  # No problems detected
 
 
 def display_image(image_b64, image_size, width, image_name):
@@ -625,13 +580,65 @@ def display_logo(large):
     display_image(logo_b64, logo_size, width, "Powered-by-Giphy.png")
 
 
-def clean_cache(args, cache_dir):
+# ----- Caching -----
+
+def load_cached_image(image_id):
+    """
+    Loads a GIF from cache, returning its raw image data, or None if it's not in cache.
+    """
+    cache_dir, cache_path = get_cache_paths(image_id)
+
+    try:
+        with open(cache_path, "rb") as cache_file:
+            return cache_file.read()
+    except OSError as ex:
+        if ex.errno != errno.ENOENT:
+            raise  # An error other than file-doesn't-exist occurred; bubble it up
+
+    return None  # The GIF isn't in cache (or the cache directory doesn't even exist)
+
+
+def cache_image(image_id, image_data):
+    """
+    Writes a GIF to the cache directory, using its ID to determine its on-disk name.
+    Some attempts are made to prevent concurrently-executing instances of this program from stomping on
+    each other's use of cache, but concurrent interactions haven't been thoroughly tested.
+    """
+    cache_dir, cache_path = get_cache_paths(image_id)
+
+    try:
+        # Ensure that the cache dir exists
+        os.makedirs(cache_dir)
+    except OSError:
+        if not path.isdir(cache_dir):
+            raise
+
+    with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
+        temp_path = temp_file.name
+        temp_file.write(image_data)
+        temp_file.flush()
+        fsync(temp_file.fileno())
+
+    try:
+        os.replace(temp_path, cache_path)  # Atomic operation
+        fsync_dir(cache_dir)
+    except OSError:
+        # If caching is broken, the program can still work, albeit more slowly,
+        # so let's just try to clean up our temp file, then silently continue
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass  # Oh, well
+
+
+def clean_cache(args):
     """
     Cleans the cache by removing old files, based on last access time,
     until there are at most max_cache files left in the directory.
-    If we've somehow messed up in load_image() and left temp files in the cache directory,
+    If we've somehow messed up in cache_image() and left temp files in the cache directory,
     they are handled here just like GIFs, i.e. as part of the cache which may be aged out.
     """
+    cache_dir, _ = get_cache_paths(None)
     if not path.isdir(cache_dir):
         return  # Nothing to do
 
@@ -655,6 +662,32 @@ def clean_cache(args, cache_dir):
         os.chdir(cwd)
 
 
+def get_cache_paths(image_id):
+    """
+    Returns paths for the cache directory, and a file inside it for the given GIF.
+    We respect $XDG_CACHE_HOME if present, and use per-environment conventions if not.
+    https://wiki.archlinux.org/title/XDG_Base_Directory#Specification
+    """
+    cache_home = os.environ.get("XDG_CACHE_HOME")
+    if cache_home is not None and cache_home.startswith("/"):
+        return "%s/giphizer" % cache_home
+
+    cache_dir = "~/.cache/giphizer"  # Default
+    if platform.system() == "Darwin":
+        cache_dir = "~/Library/Caches/Giphizer"
+    elif platform.system() == "Windows":
+        # Doesn't include Cygwin (like "CYGWIN_NT-10.0-22000") or WSL ("Linux")
+        app_data = os.environ.get("LOCALAPPDATA")
+        if app_data is not None and app_data != "":
+            cache_dir = "%s\\%s" % (app_data, "Giphizer\\cache")
+
+    cache_dir = path.expanduser(cache_dir)
+    if image_id is not None:
+        return cache_dir, path.join(cache_dir, image_id + ".gif")
+    else:
+        return cache_dir, None
+
+
 def fsync(fd):
     """
     More effective fsync on macOS.
@@ -676,7 +709,7 @@ def fsync_dir(dir_path):
         os.close(fd)
 
 
-# Do the things
+# ----- Do the things -----
 if __name__ == '__main__':
     if os.environ.get("GIPHY_PROFILE"):
         with Profile() as profile:
@@ -688,4 +721,4 @@ if __name__ == '__main__':
                 .print_stats()
             )
     else:
-        main()
+        sys.exit(main())
