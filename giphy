@@ -284,7 +284,7 @@ def choose_image(args):
         image = data["images"]["original"]
         try:
             if args.max_size == "2MB":
-                image = data["images"]["downsized-xxx"]
+                image = data["images"]["downsized"]
             elif args.max_size == "5MB":
                 image = data["images"]["downsized_medium"]
             elif args.max_size == "8MB":
