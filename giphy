@@ -7,7 +7,7 @@
 
 """
 Have you ever though 'oh man, Giphy is great, but I wish I could use it in my terminal'?
-Well now you can! (Assuming you're an iTerm user...)
+Well now you can! (If you use iTerm or WezTerm, but not tmux or GNU screen, that is...)
 For usage info, just run this without arguments, or with -h or --help.
 """
 
@@ -95,11 +95,8 @@ def parse_command_line():
     if there are any problems with the command line, or if the user requested help.
     """
     parser = NoExitArgParser(usage="%(prog)s [options] topic",
-                             description="Displays a Giphy GIF in your terminal. "
-                                         "The 'best' and 'random' modes select a GIF based on the word or "
-                                         "phrase you enter. The 'id' mode attempts to select a specific GIF, "
-                                         "using its unique ID. "
-                                         "iTerm is needed, and images aren't displayed in tmux or GNU screen.",
+                             description="Displays a Giphy GIF in your terminal, if it's capable of that. "
+                                         "Works on iTerm and WezTerm, but not in tmux or GNU screen.",
                              add_help=False)
     parser.add_argument("topic", nargs="*",
                         help="The word, phrase or ID that determines which GIF to show")
@@ -369,24 +366,26 @@ def test_internet_connection():
 
 def check_image_capability(args):
     """
-    Checks whether the current environment supports displaying images properly. First, iTerm is required.
-    Second, we shouldn't be running under tmux or GNU screen; tmux can display some images, but fails on some GIFs,
-    and doesn't move the cursor properly when it does work, leaving the prompt on top of the displayed image;
-    GNU screen doesn't pass the escape sequences through to iTerm, so big gobs of Base64 data get displayed
-    instead of an image.
+    Checks whether the current environment supports displaying images properly.
+    A capable terminal is required, and we shouldn't be running in tmux or GNU screen.
     """
     if args.force:
         return None
 
-    if os.environ.get("ITERM_PROFILE") is None:
-        # It doesn't look like we're running under iTerm
-        return "GIFs can only be displayed in iTerm"
+    term_program = os.environ.get("TERM_PROGRAM")
+    if term_program not in ("iTerm.app", "WezTerm", "tmux"):
+        return "This terminal can't display GIFs (probably; pass -f or --force to override)"
 
-    term = os.environ.get("TERM")
-    if term is not None and term.startswith("screen"):
-        # GNU screen and tmux both set TERM to a string beginning with 'screen';
-        # GNU screen sets STY, tmux doesn't
-        return "GIFs can't be displayed in tmux or GNU screen"
+    # Both tmux and GNU screen set $TERM to a string beginning with "screen";
+    # tmux also sets $TERM_PROGRAM to "tmux", and doesn't set $STY,
+    # whereas screen leaves $TERM_PROGRAM as-is, but does set $STY
+    starts_with_screen = (os.environ.get("TERM") or "").startswith("screen")
+    sty = os.environ.get("STY")
+
+    if term_program == "tmux" or (starts_with_screen and not sty):
+        return "GIFs can't be displayed in tmux"
+    elif starts_with_screen:
+        return "GIFs can't be displayed in GNU screen"
 
     return None  # No problems detected
 
@@ -396,16 +395,17 @@ def display_image(image_b64, image_size, width, image_name):
     Displays a GIF by printing it to the terminal using iTerm's leet escape sequences.
     Call check_image_capability() first.
     """
-    open_esc = "\033]"  # "\033Ptmux;\033\033]" under tmux
-    close_esc = "\a"    # "\a\033\\" under tmux
+    # See https://iterm2.com/utilities/imgcat
+    open_esc = "\033]"
+    close_esc = "\a"
 
     file_info = "inline=1;size=%s;" % image_size
     if width is not None:
         file_info += "width=%s;" % width
     file_info += "name=%s" % b64encode(image_name.encode("utf-8")).decode("utf-8")
 
-    # if a newline isn't appended, iTerm bottom-aligns the text with the bottom of the image;
-    # not sure how other terminals handle it
+    # if a newline isn't appended (by passing end="" to print()),
+    # iTerm and WezTerm both bottom-aligns the text with the bottom of the image
     print("%s1337;File=%s:%s%s" % (open_esc, file_info, image_b64, close_esc))
 
 
