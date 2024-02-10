@@ -372,17 +372,19 @@ def check_image_capability(args):
     if args.force:
         return None
 
+    # Mintty, Tabby, VS Code, Konsole, and La Terminal (iPhone/iPad) can only show
+    # the first frame of an animated GIF, which I *guess* is better than nothing?
     term_program = os.environ.get("TERM_PROGRAM")
-    if term_program not in ("iTerm.app", "WezTerm", "tmux"):
+    if term_program not in ("iTerm.app", "WezTerm", "mintty", "Tabby", "vscode", "tmux") \
+            and not os.environ.get("KONSOLE_VERSION") \
+            and os.environ.get("LC_TERMINAL") != "LA_TERMINAL":
         return "This terminal can't display GIFs (probably; pass -f or --force to override)"
 
     # Both tmux and GNU screen set $TERM to a string beginning with "screen";
     # tmux also sets $TERM_PROGRAM to "tmux", and doesn't set $STY,
     # whereas screen leaves $TERM_PROGRAM as-is, but does set $STY
     starts_with_screen = (os.environ.get("TERM") or "").startswith("screen")
-    sty = os.environ.get("STY")
-
-    if term_program == "tmux" or (starts_with_screen and not sty):
+    if term_program == "tmux" or (starts_with_screen and not os.environ.get("STY")):
         return "GIFs can't be displayed in tmux"
     elif starts_with_screen:
         return "GIFs can't be displayed in GNU screen"
