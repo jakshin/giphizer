@@ -694,7 +694,10 @@ def fsync(fd):
     More effective fsync on macOS.
     See https://github.com/untitaker/python-atomicwrites for background.
     """
-    fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+    if platform.system() == "Darwin":
+        fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+    else:
+        os.fsync(fd)
 
 
 def fsync_dir(dir_path):
