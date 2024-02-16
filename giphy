@@ -592,6 +592,12 @@ def is_hidpi_screen():
     if platform.system() != "Darwin":
         return False
 
+    release = int(re.sub(r'\..*', '', platform.release()))
+    if release >= 22:
+        # Don't waste time running system_profiler on recent macOS versions
+        # (I don't think Ventura and later support Macs old enough to have non-HiDPI screens)
+        return True
+
     comp_proc = subprocess.run(["system_profiler", "SPDisplaysDataType"],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if comp_proc.returncode == 0:
