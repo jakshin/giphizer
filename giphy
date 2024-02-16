@@ -21,12 +21,14 @@ import re
 import shutil
 import socket
 import ssl
+import subprocess
 import sys
 import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
 from base64 import b64encode
+from functools import cache
 from os import path
 from urllib.parse import urlencode
 
@@ -549,7 +551,10 @@ def display_logo(large):
             IYTQCSSEEEIIIXQCCSGEEEJIavl/AQYAXJ75qdzxDkYAAAAASUVORK5CYII=
             """.replace(' ', '')
         logo_size = 9719
-        width = "320px"
+        if is_hidpi_screen():
+            width = "320px"
+        else:
+            width = "160px"
     else:
         # base64 --break=100 -i Poweredby_100px-Black_VertLogo.png | pbcopy
         logo_b64 = """
@@ -576,6 +581,26 @@ def display_logo(large):
         width = None
 
     display_image(logo_b64, logo_size, width, "Powered-by-Giphy.png")
+
+
+@cache
+def is_hidpi_screen():
+    """
+    Tries to detect whether the screen is HiDPI or not. Only works on macOS; returns False elsewhere.
+    We call the system_profiler CLI, capture its output, and compare its "Resolution" and "UI Looks like" lines.
+    """
+    if platform.system() != "Darwin":
+        return False
+
+    comp_proc = subprocess.run(["system_profiler", "SPDisplaysDataType"],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if comp_proc.returncode == 0:
+        res_match = re.search(r'Resolution:\s+(\d+)', comp_proc.stdout)
+        looks_match = re.search(r'Looks like:\s+(\d+)', comp_proc.stdout)
+        if res_match and looks_match:
+            return res_match.group(1) != looks_match.group(1)
+
+    return True  # Seems like the best guess, these days
 
 
 # ----- Caching -----
