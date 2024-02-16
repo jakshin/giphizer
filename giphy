@@ -30,9 +30,6 @@ from base64 import b64encode
 from os import path
 from urllib.parse import urlencode
 
-from cProfile import Profile
-from pstats import SortKey, Stats
-
 
 def main():
     """
@@ -716,6 +713,11 @@ def fsync_dir(dir_path):
 # ----- Do the things -----
 
 if __name__ == '__main__':
+    sys.exit(main())
+
+    # from cProfile import Profile
+    # from pstats import SortKey, Stats
+    #
     # with Profile() as profile:
     #     print(f"{main() = }")
     #     (
@@ -724,4 +726,3 @@ if __name__ == '__main__':
     #         .sort_stats(SortKey.CUMULATIVE)
     #         .print_stats()
     #     )
-    sys.exit(main())
