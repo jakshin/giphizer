@@ -714,15 +714,14 @@ def fsync_dir(dir_path):
 
 
 # ----- Do the things -----
+
 if __name__ == '__main__':
-    if os.environ.get("GIPHY_PROFILE"):
-        with Profile() as profile:
-            print(f"{main() = }")
-            (
-                Stats(profile)
-                .strip_dirs()
-                .sort_stats(SortKey.CUMULATIVE)
-                .print_stats()
-            )
-    else:
-        sys.exit(main())
+    # with Profile() as profile:
+    #     print(f"{main() = }")
+    #     (
+    #         Stats(profile)
+    #         .strip_dirs()
+    #         .sort_stats(SortKey.CUMULATIVE)
+    #         .print_stats()
+    #     )
+    sys.exit(main())
