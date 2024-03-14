@@ -38,9 +38,9 @@ def main():
     Main program logic.
     """
     try:
-        args = parse_command_line()
+        args = parse_arguments()
         if args is None:
-            return 0
+            return 0  # Help/usage info was displayed
 
         incapable = check_image_capability(args)
         if incapable is not None:
@@ -88,9 +88,9 @@ def fail(err_msg):
 
 # ----- Parsing options from our config file and command line -----
 
-def parse_command_line():
+def parse_arguments():
     """
-    Parses command-line options, returning a Namespace. Displays usage/error and exits
+    Parses command-line options, returning a Namespace. Displays an error or usage info
     if there are any problems with the command line, or if the user requested help.
     """
     parser = NoExitArgParser(usage="%(prog)s [options] topic",
@@ -123,7 +123,7 @@ def parse_command_line():
     context = ""
 
     try:
-        dotfile_argv, dotfile = read_options_from_dotfile()
+        dotfile_argv, dotfile = read_dotfile()
         context = " in %s" % dotfile
         args = parser.parse_args(dotfile_argv)
 
@@ -148,7 +148,7 @@ def parse_command_line():
             topic.append(arg)
     args.topic = " ".join(topic)
 
-    # Display help/usage info and exit, if needed
+    # Display help/usage info, if needed
     if args.topic == "" or args.help:
         columns = int(shutil.get_terminal_size().columns)
         if columns > 100:
@@ -163,7 +163,7 @@ def parse_command_line():
             print()
             display_logo(True)
 
-        return None
+        return None  # Request immediate exit
     else:
         return args
 
@@ -182,9 +182,9 @@ class NoExitArgParser(argparse.ArgumentParser):
         raise argparse.ArgumentError(None, message)
 
 
-def read_options_from_dotfile():
+def read_dotfile():
     """
-    Reads options from the first of our dotfiles that exists, returning an array of strings,
+    Reads the first of our dotfiles that exists. Returns its words in an array of strings,
     and the dotfile's "pretty path" (where $HOME is represented by "~" instead of its actual path).
     Lines beginning with hash characters are ignored, so they can serve as comments in the file.
     """
@@ -264,7 +264,7 @@ def choose_image(args):
             elif args.max_size == "8MB":
                 image = data["images"]["downsized_large"]
         except KeyError:
-            pass
+            pass  # Fall back to the original version
 
         return {
             "id":        data["id"],
@@ -396,7 +396,8 @@ def display_image(image_b64, image_size, width, image_name):
     Displays a GIF by printing it to the terminal using iTerm's leet escape sequences.
     Call check_image_capability() first.
     """
-    # See https://iterm2.com/utilities/imgcat
+    # See https://iterm2.com/documentation-images.html
+    # and https://iterm2.com/utilities/imgcat
     open_esc = "\033]"
     close_esc = "\a"
 
@@ -405,7 +406,7 @@ def display_image(image_b64, image_size, width, image_name):
         file_info += "width=%s;" % width
     file_info += "name=%s" % b64encode(image_name.encode("utf-8")).decode("utf-8")
 
-    # if a newline isn't appended (by passing end="" to print()),
+    # If a newline isn't appended (by passing end="" to print()),
     # iTerm and WezTerm both bottom-aligns the text with the bottom of the image
     print("%s1337;File=%s:%s%s" % (open_esc, file_info, image_b64, close_esc))
 
@@ -587,7 +588,7 @@ def display_logo(large):
 def is_hidpi_screen():
     """
     Tries to detect whether the screen is HiDPI or not. Only works on macOS; returns False elsewhere.
-    We call the system_profiler CLI, capture its output, and compare its "Resolution" and "UI Looks like" lines.
+    We capture the system_profiler CLI's output, and compare its "Resolution" and "UI Looks like" lines.
     """
     if platform.system() != "Darwin":
         return False
