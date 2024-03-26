@@ -167,7 +167,7 @@ def parse_arguments():
         parser.print_help()
         stdout("\nSource: https://github.com/jakshin/giphizer\n")
         stdout("All images displayed are from Giphy (https://giphy.com),\n"
-              "but this program has no official connection with Giphy.")
+               "but this program has no official connection with Giphy.")
 
         if check_image_capability(args) is None:
             stdout()
