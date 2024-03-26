@@ -60,7 +60,7 @@ def main():
         display_image(image_b64, len(image_data), None, image_url)
 
         if args.show_url:
-            print(image_info["page_url"])
+            stdout(image_info["page_url"])
         display_logo(False)
 
         clean_cache(args)
@@ -69,8 +69,18 @@ def main():
     except GiphizerException as ex:
         err_msg = str(ex)
         if err_msg:
-            sys.stderr.write("Error: %s\n" % str(ex))
+            stderr("Error: %s" % str(ex))
         return 1
+
+
+def stdout(*args, **kwargs):
+    """Outputs to stdout, using print()."""
+    print(*args, **kwargs)
+
+
+def stderr(*args, **kwargs):
+    """Outputs to stderr, using print()."""
+    print(*args, file=sys.stderr, **kwargs)
 
 
 class GiphizerException(Exception):
@@ -133,8 +143,8 @@ def parse_arguments():
         context = ""
         parser.parse_args(namespace=args)
     except argparse.ArgumentError as ex:
-        sys.stderr.write("Error%s: %s\n" % (context, str(ex)))
-        sys.stderr.write("For usage information, run: giphy --help\n")
+        stderr("Error%s: %s" % (context, str(ex)))
+        stderr("For usage information, run: giphy --help")
         raise GiphizerException
 
     if args.max_cache < 0:
@@ -155,12 +165,12 @@ def parse_arguments():
             os.environ["COLUMNS"] = "100"
 
         parser.print_help()
-        print("\nSource: https://github.com/jakshin/giphizer\n")
-        print("All images displayed are from Giphy (https://giphy.com),\n"
+        stdout("\nSource: https://github.com/jakshin/giphizer\n")
+        stdout("All images displayed are from Giphy (https://giphy.com),\n"
               "but this program has no official connection with Giphy.")
 
         if check_image_capability(args) is None:
-            print()
+            stdout()
             display_logo(True)
 
         return None  # Request immediate exit
@@ -406,9 +416,9 @@ def display_image(image_b64, image_size, width, image_name):
         file_info += "width=%s;" % width
     file_info += "name=%s" % b64encode(image_name.encode("utf-8")).decode("utf-8")
 
-    # If a newline isn't appended (by passing end="" to print()),
+    # If a newline isn't appended (by passing end="" to stdout()),
     # iTerm and WezTerm both bottom-aligns the text with the bottom of the image
-    print("%s1337;File=%s:%s%s" % (open_esc, file_info, image_b64, close_esc))
+    stdout("%s1337;File=%s:%s%s" % (open_esc, file_info, image_b64, close_esc))
 
 
 def display_logo(large):
