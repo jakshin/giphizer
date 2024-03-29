@@ -629,7 +629,7 @@ def load_cached_image(image_id):
     cache_dir, cache_path = get_cache_paths(image_id)
 
     try:
-        with open(cache_path, "rb") as cache_file:
+        with open(cache_path, "rb") as cache_file:  # Errors if cache_path exists as a directory
             return cache_file.read()
     except OSError as ex:
         if ex.errno != errno.ENOENT:
@@ -645,28 +645,23 @@ def cache_image(image_id, image_data):
     each other's use of cache, but concurrent interactions haven't been thoroughly tested.
     """
     cache_dir, cache_path = get_cache_paths(image_id)
+    os.makedirs(cache_dir, exist_ok=True)
 
     try:
-        # Ensure that the cache dir exists
-        os.makedirs(cache_dir)
-    except OSError:
-        if not path.isdir(cache_dir):
-            raise
+        with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
+            temp_path = temp_file.name
+            temp_file.write(image_data)
+            temp_file.flush()
+            fsync(temp_file.fileno())
 
-    with tempfile.NamedTemporaryFile(delete=False, dir=cache_dir, suffix=".down") as temp_file:
-        temp_path = temp_file.name
-        temp_file.write(image_data)
-        temp_file.flush()
-        fsync(temp_file.fileno())
-
-    try:
-        os.replace(temp_path, cache_path)  # Atomic operation
+        os.replace(temp_path, cache_path)  # Atomic operation; Errors if cache_path exists as a dir
         fsync_dir(cache_dir)
     except OSError:
         # If caching is broken, the program can still work, albeit more slowly,
         # so let's just try to clean up our temp file, then silently continue
         try:
-            os.remove(temp_path)
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
         except OSError:
             pass  # Oh, well
 
@@ -682,24 +677,29 @@ def clean_cache(args):
     if not path.isdir(cache_dir):
         return  # Nothing to do
 
+    files = os.listdir(cache_dir)
     cwd = os.getcwd()
 
     try:
         os.chdir(cache_dir)
-        files = sorted(os.listdir(cache_dir), key=path.getatime)
-        delete = len(files) - args.max_cache
-
-        for i in range(0, delete):
-            try:
-                # Attempt to perform atomic delete in a way which won't break with concurrent program runs
-                file_name = files[i]
-                cache_path = path.join(cache_dir, file_name)
-                os.remove(cache_path)
-            except OSError as ex:
-                if ex.errno != errno.ENOENT:
-                    raise  # An error other than file-doesn't-exist occurred; bubble it up
+        files.sort(key=path.getatime)
+    except FileNotFoundError:
+        # Something else is cleaning up the cache concurrently; just bail
+        return
     finally:
         os.chdir(cwd)
+
+    delete = len(files) - args.max_cache
+
+    for i in range(0, delete):
+        try:
+            file_name = files[i]
+            cache_path = path.join(cache_dir, file_name)
+            os.remove(cache_path)  # Errors if cache_path is a directory
+        except FileNotFoundError:
+            # The file no longer exists; it might've been deleted by another instance
+            # of this script, running concurrently with this one
+            pass
 
 
 def get_cache_paths(image_id):
@@ -708,15 +708,18 @@ def get_cache_paths(image_id):
     We respect $XDG_CACHE_HOME if present, and use per-environment conventions if not.
     https://wiki.archlinux.org/title/XDG_Base_Directory#Specification
     """
-    cache_home = os.environ.get("XDG_CACHE_HOME")
-    if cache_home is not None and cache_home.startswith("/"):
-        return "%s/giphizer" % cache_home
-
     cache_dir = "~/.cache/giphizer"  # Default
-    if platform.system() == "Darwin":
+
+    cache_home = os.environ.get("XDG_CACHE_HOME")
+    if cache_home is not None and (cache_home.startswith("/") or platform.system() == "Windows"):
+        cache_dir = "%s/giphizer" % cache_home
+
+    elif platform.system() == "Darwin":
         cache_dir = "~/Library/Caches/Giphizer"
+
     elif platform.system() == "Windows":
-        # Doesn't include Cygwin (like "CYGWIN_NT-10.0-22000") or WSL ("Linux")
+        # We don't take this code path on WSL, where system() returns "Linux",
+        # or on Cygwin, where it returns a value like "CYGWIN_NT-10.0-22000"
         app_data = os.environ.get("LOCALAPPDATA")
         if app_data is not None and app_data != "":
             cache_dir = "%s\\%s" % (app_data, "Giphizer\\cache")
