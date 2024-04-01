@@ -38,7 +38,7 @@ def main():
     Main program logic.
     """
     try:
-        args = parse_arguments()
+        args = parse_arguments(sys.argv[1:])  # sys.argv[0] is the script's own name
         if args is None:
             return 0  # Help/usage info was displayed
 
@@ -98,7 +98,7 @@ def fail(err_msg):
 
 # ----- Parsing options from our config file and command line -----
 
-def parse_arguments():
+def parse_arguments(argv):
     """
     Parses command-line options, returning a Namespace. Displays an error or usage info
     if there are any problems with the command line, or if the user requested help.
@@ -141,7 +141,7 @@ def parse_arguments():
         args.help = False
 
         context = ""
-        parser.parse_args(namespace=args)
+        parser.parse_args(argv, namespace=args)
     except argparse.ArgumentError as ex:
         stderr("Error%s: %s" % (context, str(ex)))
         stderr("For usage information, run: giphy --help")
@@ -194,7 +194,7 @@ class NoExitArgParser(argparse.ArgumentParser):
 
 def read_dotfile():
     """
-    Reads the first of our dotfiles that exists. Returns its words in an array of strings,
+    Reads the first of our dotfiles that exists. Returns its words in a list of strings,
     and the dotfile's "pretty path" (where $HOME is represented by "~" instead of its actual path).
     Lines beginning with hash characters are ignored, so they can serve as comments in the file.
     """

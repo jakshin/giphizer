@@ -33,7 +33,7 @@ def import_path(path):
     return module
 
 
-def set_up_function_mocks(giphy):
+def set_up_function_mocks(giphy, *exceptions):
     # Save original functions so we can restore them later
     global original_fns
     if len(original_fns) == 0:
@@ -43,46 +43,59 @@ def set_up_function_mocks(giphy):
         for fn_name in fn_names:
             original_fns[fn_name] = getattr(giphy, fn_name)
 
+    # Initialize some test data
+    global test_image_id, test_image_url, test_image_base64
+    gif_bytes = b64decode(test_image_base64)
+
     # Mock functions
     giphy.stdout = create_autospec(giphy.stdout)
     giphy.stderr = create_autospec(giphy.stderr)
 
-    giphy.parse_arguments = create_autospec(giphy.parse_arguments, return_value=argparse.Namespace(
-        topic=[],
-        help=False,
-        mode="best",
-        max_rating=None,
-        max_size=None,
-        max_cache=100,
-        force=False,
-        show_url=False,
-    ))
-    giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[[], None])
+    if "parse_arguments" not in exceptions:
+        giphy.parse_arguments = create_autospec(giphy.parse_arguments, return_value=argparse.Namespace(
+            topic=[],
+            help=False,
+            mode="best",
+            max_rating=None,
+            max_size=None,
+            max_cache=100,
+            force=False,
+            show_url=False,
+        ))
 
-    global test_image_id, test_image_url
-    giphy.choose_image = create_autospec(giphy.choose_image, return_value={
-        "id": test_image_id,
-        "page_url": test_image_page_url,
-        "rating": "g",
-        "username": "someuser",
-        "image_url": test_image_url,
-        "width": 10,
-        "height": 8,
-        "size": 169,
-    })
+    if "read_dotfile" not in exceptions:
+        giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[[], None])
 
-    global test_image_base64
-    gif_bytes = b64decode(test_image_base64)
-    giphy.download_image = create_autospec(giphy.download_image, return_value=gif_bytes)
+    if "choose_image" not in exceptions:
+        giphy.choose_image = create_autospec(giphy.choose_image, return_value={
+            "id": test_image_id,
+            "page_url": test_image_page_url,
+            "rating": "g",
+            "username": "someuser",
+            "image_url": test_image_url,
+            "width": 10,
+            "height": 8,
+            "size": 169,
+        })
 
-    giphy.check_image_capability = create_autospec(giphy.check_image_capability, return_value=None)
-    giphy.display_image = create_autospec(giphy.display_image)
-    giphy.display_logo = create_autospec(giphy.display_logo)
-    giphy.is_hidpi_screen = create_autospec(giphy.is_hidpi_screen, return_value=True)
+    if "download_image" not in exceptions:
+        giphy.download_image = create_autospec(giphy.download_image, return_value=gif_bytes)
 
-    giphy.load_cached_image = create_autospec(giphy.load_cached_image, return_value=gif_bytes)
-    giphy.cache_image = create_autospec(giphy.cache_image)
-    giphy.clean_cache = create_autospec(giphy.clean_cache)
+    if "check_image_capability" not in exceptions:
+        giphy.check_image_capability = create_autospec(giphy.check_image_capability, return_value=None)
+    if "display_image" not in exceptions:
+        giphy.display_image = create_autospec(giphy.display_image)
+    if "display_logo" not in exceptions:
+        giphy.display_logo = create_autospec(giphy.display_logo)
+    if "is_hidpi_screen" not in exceptions:
+        giphy.is_hidpi_screen = create_autospec(giphy.is_hidpi_screen, return_value=True)
+
+    if "load_cached_image" not in exceptions:
+        giphy.load_cached_image = create_autospec(giphy.load_cached_image, return_value=gif_bytes)
+    if "cache_image" not in exceptions:
+        giphy.cache_image = create_autospec(giphy.cache_image)
+    if "clean_cache" not in exceptions:
+        giphy.clean_cache = create_autospec(giphy.clean_cache)
 
 
 def tear_down_function_mocks(giphy):
