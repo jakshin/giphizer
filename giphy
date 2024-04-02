@@ -288,10 +288,7 @@ def choose_image(args):
         }
     except urllib.error.URLError as ex:
         if isinstance(ex, urllib.error.HTTPError):
-            if ex.code == 404 and args.mode == "id":
-                fail("Giphy couldn't find the image; is the ID incorrect?")
-            else:
-                fail(get_giphy_api_err_msg(ex.code))
+            fail(get_giphy_api_err_msg(ex.code))
         elif isinstance(ex.reason, socket.gaierror) and not test_internet_connection():
             fail("Couldn't contact Giphy's API; is the internet connection down?")
         else:
@@ -311,10 +308,10 @@ def get_giphy_api_err_msg(response_code):
         return "Giphy is experiencing problems right now (code %s)" % response_code
 
     err_msg = {
-        # 404 is handled specially because it can mean something different for id vs translate/random
         400: "Giphy API request was formatted incorrectly or missing a required parameter",
         401: "Giphy API key is missing or invalid",
         403: "Giphy API request wasn't authorized; probably an API key problem",
+        404: "Giphy couldn't find the image; is the ID incorrect?",
         414: "Topic was too long, try again with a shorter phrase",
         429: "Too many requests, rate limit exceeded, try again later",
     }.get(response_code)
