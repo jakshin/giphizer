@@ -58,6 +58,32 @@ class TestArgs(unittest.TestCase):
             else:
                 os.environ.pop("USERPROFILE", None)
 
+    def test_ignores_topic_in_a_dotfile(self):
+        original_read_dotfile_fn = giphy.read_dotfile
+        try:
+            dotfile_argv = ["awesome", "fun", "yay"]
+            giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[dotfile_argv, "~/.dot"])
+
+            with patch('sys.stdout', new=StringIO()):
+                args = giphy.parse_arguments([])
+                self.assertIsNone(args)  # Usage info displayed, because no topic
+        finally:
+            giphy.read_dotfile = original_read_dotfile_fn
+
+    def test_ignores_help_flags_in_a_dotfile(self):
+        original_read_dotfile_fn = giphy.read_dotfile
+        try:
+            dotfile_argv = ["--max-cache=9876", "-fh", "--help"]
+            giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[dotfile_argv, "~/.dot"])
+
+            args = giphy.parse_arguments(["awesome"])
+            self.assertEqual(args.max_cache, 9876)  # Sanity checks
+            self.assertEqual(args.force, True)
+
+            self.assertEqual(args.help, False)
+        finally:
+            giphy.read_dotfile = original_read_dotfile_fn
+
     def test_overrides_dotfile_options_with_command_line_options(self):
         original_read_dotfile_fn = giphy.read_dotfile
         try:
