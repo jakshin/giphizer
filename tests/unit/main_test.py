@@ -61,6 +61,17 @@ class TestMain(unittest.TestCase):
         giphy.main()
         giphy.download_image.assert_called_with(utils.test_image_url)
 
+    def test_caches_a_downloaded_image_iff_it_should(self):
+        giphy.load_cached_image.return_value = None
+        giphy.parse_arguments.return_value.max_cache = 0
+        giphy.main()
+        giphy.download_image.assert_called()  # Sanity check
+        giphy.cache_image.assert_not_called()
+
+        giphy.parse_arguments.return_value.max_cache = 100
+        giphy.main()
+        giphy.cache_image.assert_called()
+
     def test_displays_an_image(self):
         return_value = giphy.main()
 
