@@ -6,15 +6,10 @@ import unittest
 import utils
 from io import StringIO
 from unittest.mock import create_autospec, patch
+from utils import AnyStringContaining
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 giphy = utils.import_path("%s/../../giphy" % this_dir)
-
-
-class AnyStringContaining(str):
-    def __eq__(self, other):
-        # This string is "equal to" any other string it's a substring of
-        return self in other
 
 
 class TestArgs(unittest.TestCase):

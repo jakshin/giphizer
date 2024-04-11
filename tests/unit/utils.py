@@ -1,7 +1,8 @@
 import argparse
-import os
 import importlib.machinery
 import importlib.util
+import os
+import re
 import sys
 from base64 import b64decode
 from unittest.mock import create_autospec
@@ -102,3 +103,22 @@ def tear_down_function_mocks(giphy):
     global original_fns
     for fn_name, fn in original_fns.items():
         setattr(giphy, fn_name, fn)
+
+
+class AnyStringContaining(str):
+    """
+    A string that's "equal to" any other string it's a substring of.
+    For use with .assert_called_with() etc.
+    """
+    def __eq__(self, other):
+        return self in other
+
+
+class AnyStringMatching(str):
+    """
+    A string that's "equal to" any other string it matches as a regex.
+    This string should contain the regex pattern.
+    For use with .assert_called_with() etc.
+    """
+    def __eq__(self, other):
+        return re.search(str(self), other) is not None
