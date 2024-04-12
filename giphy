@@ -297,6 +297,9 @@ def choose_image(args):
         fail("Unexpected response from Giphy (JSON error: %s)" % ex.msg)
     except KeyError as ex:
         fail("Unexpected response from Giphy (missing key: %s)" % ex.args[0])
+    except ValueError as ex:
+        # Likely a non-integer width, height, or size
+        fail("Unexpected response from Giphy (%s)" % ex.args[0])
 
 
 def get_giphy_api_err_msg(response_code):

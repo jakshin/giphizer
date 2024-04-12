@@ -54,7 +54,7 @@ def set_up_function_mocks(giphy, *exceptions):
 
     if "parse_arguments" not in exceptions:
         giphy.parse_arguments = create_autospec(giphy.parse_arguments, return_value=argparse.Namespace(
-            topic=[],
+            topic="",
             help=False,
             mode="best",
             max_rating=None,
