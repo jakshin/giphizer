@@ -43,15 +43,8 @@ class TestArgs(unittest.TestCase):
             if os.path.isdir(temp_dir):
                 shutil.rmtree(temp_dir)
 
-            if original_home:
-                os.environ["HOME"] = original_home
-            else:
-                os.environ.pop("HOME", None)
-
-            if original_userprofile:
-                os.environ["USERPROFILE"] = original_userprofile
-            else:
-                os.environ.pop("USERPROFILE", None)
+            utils.restore_environment_variable("HOME", original_home)
+            utils.restore_environment_variable("USERPROFILE", original_userprofile)
 
     def test_ignores_topic_in_a_dotfile(self):
         original_read_dotfile_fn = giphy.read_dotfile

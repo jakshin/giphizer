@@ -15,7 +15,7 @@ giphy = utils.import_path("%s/../../giphy" % this_dir)
 
 
 def init_cache_dir(num_files, mode=None):
-    cache_dir = "%s/giphizer" % os.environ["XDG_CACHE_HOME"]
+    cache_dir = "%s/giphizer" % os.environ.get("XDG_CACHE_HOME")
     Path(cache_dir).mkdir(parents=True)
 
     for i in range(num_files):
@@ -33,7 +33,7 @@ def init_cache_dir(num_files, mode=None):
 
 
 def count_cached_files(pattern="*"):
-    cache_dir = "%s/giphizer" % os.environ["XDG_CACHE_HOME"]
+    cache_dir = "%s/giphizer" % os.environ.get("XDG_CACHE_HOME")
     return len([file for file in Path(cache_dir).rglob(pattern)
                if file.is_file()])
 
@@ -57,10 +57,7 @@ class TestCacheCleanup(unittest.TestCase):
                 os.chmod(cache_dir, 0o755, follow_symlinks=False)
             shutil.rmtree(self.test_cache_home)
 
-        if self.original_xdg_cache_home:
-            os.environ["XDG_CACHE_HOME"] = self.original_xdg_cache_home
-        else:
-            os.environ.pop("XDG_CACHE_HOME", None)
+        utils.restore_environment_variable("XDG_CACHE_HOME", self.original_xdg_cache_home)
 
     def test_does_nothing_if_the_cache_directory_does_not_exist(self):
         args = argparse.Namespace(max_cache=10)

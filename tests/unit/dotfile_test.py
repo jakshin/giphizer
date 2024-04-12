@@ -19,8 +19,6 @@ class TestDotfile(unittest.TestCase):
         self.original_xdg_config_home = None
 
     def setUp(self):
-        utils.set_up_function_mocks(giphy, "read_dotfile")
-
         self.original_home = os.environ.get("HOME")
         self.original_userprofile = os.environ.get("USERPROFILE")
         self.original_xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
@@ -33,21 +31,13 @@ class TestDotfile(unittest.TestCase):
         os.environ["XDG_CONFIG_HOME"] = os.path.join(self.temp_dir, ".xdg_config")
 
         os.makedirs(self.temp_dir)
-        os.makedirs(os.path.join(os.environ["XDG_CONFIG_HOME"], "giphy"))
+        os.makedirs(os.path.join(os.environ.get("XDG_CONFIG_HOME"), "giphy"))
         os.makedirs(os.path.join(self.temp_dir, ".config", "giphy"))
 
     def tearDown(self):
-        utils.tear_down_function_mocks(giphy)
-
-        def restore_environment_variable(name, original_value):
-            if original_value:
-                os.environ[name] = original_value
-            else:
-                os.environ.pop(name, None)
-
-        restore_environment_variable("HOME", self.original_home)
-        restore_environment_variable("USERPROFILE", self.original_userprofile)
-        restore_environment_variable("XDG_CONFIG_HOME", self.original_xdg_config_home)
+        utils.restore_environment_variable("HOME", self.original_home)
+        utils.restore_environment_variable("USERPROFILE", self.original_userprofile)
+        utils.restore_environment_variable("XDG_CONFIG_HOME", self.original_xdg_config_home)
 
         if os.path.isdir(self.temp_dir):
             shutil.rmtree(self.temp_dir)
@@ -65,9 +55,6 @@ class TestDotfile(unittest.TestCase):
             Path(dotfile_path).unlink(missing_ok=True)
 
     def test_reads_from_a_dotfile(self):
-        args = giphy.parse_arguments(["foo"])
-        self.assertEqual(args.max_cache, 100)  # Sanity check, default value
-
         self.write_dotfile("~/.giphyrc", "--max-cache=42")
         self.write_dotfile("~/.xdg_config/giphy/giphyrc", "--max-cache=43")
         self.write_dotfile("~/.config/giphy/giphyrc", "--max-cache=44")

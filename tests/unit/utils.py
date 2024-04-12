@@ -34,6 +34,14 @@ def import_path(path):
     return module
 
 
+def restore_environment_variable(name, original_value):
+    """Restores an environment variable to a previous value, unsetting it if needed."""
+    if original_value is None:
+        os.environ.pop(name, None)
+    else:
+        os.environ[name] = original_value
+
+
 def set_up_function_mocks(giphy, *exceptions):
     # Save original functions so we can restore them later
     global original_fns

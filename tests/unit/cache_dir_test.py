@@ -23,20 +23,13 @@ class TestCacheDir(unittest.TestCase):
             platform.system = self.original_system_fn
             self.original_system_fn = None
 
-        if self.original_xdg_cache_home:
-            os.environ["XDG_CACHE_HOME"] = self.original_xdg_cache_home
-        else:
-            os.environ.pop("XDG_CACHE_HOME", None)
-
-        if self.original_localappdata:
-            os.environ["LOCALAPPDATA"] = self.original_localappdata
-        else:
-            os.environ.pop("LOCALAPPDATA", None)
+        utils.restore_environment_variable("XDG_CACHE_HOME", self.original_xdg_cache_home)
+        utils.restore_environment_variable("LOCALAPPDATA", self.original_localappdata)
 
     def check_cache_paths(self, expected_in_cache_dir):
         """Utility method for checking cache directory use."""
         image_id = "d8MQjoGL"
-        os.environ.pop("XDG_CACHE_HOME", None)
+        utils.restore_environment_variable("XDG_CACHE_HOME", None)
         cache_dir, cache_path = giphy.get_cache_paths(image_id)
 
         self.assertIn(expected_in_cache_dir, cache_dir)
