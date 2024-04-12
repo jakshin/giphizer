@@ -1,9 +1,7 @@
 import argparse
 import os
 import os.path
-import random
 import shutil
-import string
 import unittest
 import utils
 from datetime import datetime, timedelta
@@ -45,8 +43,7 @@ class TestCacheCleanup(unittest.TestCase):
         self.original_xdg_cache_home = None
 
     def setUp(self):
-        test_cache_dir_name = "giphizer-test-%s" % "".join(random.choices(string.ascii_lowercase, k=11))
-        self.test_cache_home = os.path.join(os.environ.get("TMPDIR"), test_cache_dir_name)
+        self.test_cache_home = utils.temp_dir_path("cc")
         self.original_xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
         os.environ["XDG_CACHE_HOME"] = self.test_cache_home
 

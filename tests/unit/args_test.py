@@ -1,7 +1,5 @@
 import os.path
-import random
 import shutil
-import string
 import unittest
 import utils
 from io import StringIO
@@ -41,8 +39,7 @@ class TestArgs(unittest.TestCase):
         args = giphy.parse_arguments(["foo"])
         self.assertFalse(args.show_url)  # Sanity check
 
-        temp_dir_name = "giphizer-test-%s" % "".join(random.choices(string.ascii_lowercase, k=10))
-        temp_dir = os.path.join(os.environ.get("TMPDIR"), temp_dir_name)
+        temp_dir = utils.temp_dir_path("args")
         original_home = os.environ.get("HOME")
         original_userprofile = os.environ.get("USERPROFILE")
 

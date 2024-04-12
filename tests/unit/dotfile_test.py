@@ -1,7 +1,5 @@
 import os.path
-import random
 import shutil
-import string
 import unittest
 import utils
 from pathlib import Path
@@ -23,9 +21,7 @@ class TestDotfile(unittest.TestCase):
         self.original_userprofile = os.environ.get("USERPROFILE")
         self.original_xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
 
-        test_dir_name = "giphizer-test-%s" % "".join(random.choices(string.ascii_lowercase, k=9))
-        self.temp_dir = os.path.join(os.environ.get("TMPDIR"), test_dir_name)
-
+        self.temp_dir = utils.temp_dir_path("dot")
         os.environ["HOME"] = self.temp_dir
         os.environ["USERPROFILE"] = self.temp_dir
         os.environ["XDG_CONFIG_HOME"] = os.path.join(self.temp_dir, ".xdg_config")

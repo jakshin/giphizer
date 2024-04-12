@@ -1,7 +1,9 @@
 import importlib.machinery
 import importlib.util
 import os
+import random
 import re
+import string
 import sys
 
 
@@ -36,6 +38,22 @@ def restore_environment_variable(name, original_value):
         unset_environment_variable(name)
     else:
         os.environ[name] = original_value
+
+
+def temp_dir_path(tag):
+    """
+    Returns the path to a unique temporary directory whose name will contain the specified tag.
+    The directory is not automatically created.
+    """
+    dir_name = "giphizer-%s-%s" % (tag, "".join(random.choices(string.ascii_lowercase, k=8)))
+
+    base_path = os.environ.get("TMPDIR")
+    if not base_path:
+        base_path = os.environ.get("TMP")
+    if not base_path:
+        base_path = "/tmp"
+
+    return os.path.join(base_path, dir_name)
 
 
 def unset_environment_variable(name):
