@@ -1,17 +1,68 @@
+import argparse
 import os.path
 import unittest
 import utils
+from base64 import b64decode
+from unittest.mock import create_autospec
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 giphy = utils.import_path("%s/../../giphy" % this_dir)
 
 
 class TestMain(unittest.TestCase):
+    def __init__(self, methodName='runTest'):
+        super().__init__(methodName)
+        self.original_fns = {}
+
     def setUp(self):
-        utils.set_up_function_mocks(giphy)
+        fn_names = ["stdout", "stderr", "parse_arguments", "read_dotfile", "choose_image", "download_image",
+                    "check_image_capability", "display_image", "display_logo", "is_hidpi_screen",
+                    "load_cached_image", "cache_image", "clean_cache"]
+        for fn_name in fn_names:
+            self.original_fns[fn_name] = getattr(giphy, fn_name)
+
+        giphy.stdout = create_autospec(giphy.stdout)
+        giphy.stderr = create_autospec(giphy.stderr)
+
+        giphy.parse_arguments = create_autospec(giphy.parse_arguments, return_value=argparse.Namespace(
+            topic="",
+            help=False,
+            mode="best",
+            max_rating=None,
+            max_size=None,
+            max_cache=100,
+            force=False,
+            show_url=False,
+        ))
+
+        giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[[], None])
+
+        giphy.choose_image = create_autospec(giphy.choose_image, return_value={
+            "id": utils.test_image_id,
+            "page_url": utils.test_image_page_url,
+            "rating": "g",
+            "username": "someuser",
+            "image_url": utils.test_image_url,
+            "width": 10,
+            "height": 8,
+            "size": 169,
+        })
+
+        gif_bytes = b64decode(utils.test_image_base64)
+        giphy.download_image = create_autospec(giphy.download_image, return_value=gif_bytes)
+
+        giphy.check_image_capability = create_autospec(giphy.check_image_capability, return_value=None)
+        giphy.display_image = create_autospec(giphy.display_image)
+        giphy.display_logo = create_autospec(giphy.display_logo)
+        giphy.is_hidpi_screen = create_autospec(giphy.is_hidpi_screen, return_value=True)
+
+        giphy.load_cached_image = create_autospec(giphy.load_cached_image, return_value=gif_bytes)
+        giphy.cache_image = create_autospec(giphy.cache_image)
+        giphy.clean_cache = create_autospec(giphy.clean_cache)
 
     def tearDown(self):
-        utils.tear_down_function_mocks(giphy)
+        for fn_name, fn in self.original_fns.items():
+            setattr(giphy, fn_name, fn)
 
     def test_returns_without_doing_anything_more_after_displaying_usage_info(self):
         # parse_arguments() returns None in any case where it's displayed usage info;

@@ -13,11 +13,29 @@ giphy = utils.import_path("%s/../../giphy" % this_dir)
 
 
 class TestArgs(unittest.TestCase):
+    def __init__(self, methodName='runTest'):
+        super().__init__(methodName)
+        self.original_stdout_fn = None
+        self.original_stderr_fn = None
+        self.original_check_image_capability_fn = None
+        self.original_display_logo_fn = None
+
     def setUp(self):
-        utils.set_up_function_mocks(giphy, "parse_arguments", "read_dotfile")
+        self.original_stdout_fn = giphy.stdout
+        self.original_stderr_fn = giphy.stderr
+        self.original_check_image_capability_fn = giphy.check_image_capability
+        self.original_display_logo_fn = giphy.display_logo
+
+        giphy.stdout = create_autospec(giphy.stdout)
+        giphy.stderr = create_autospec(giphy.stderr)
+        giphy.check_image_capability = create_autospec(giphy.check_image_capability, return_value=None)
+        giphy.display_logo = create_autospec(giphy.display_logo)
 
     def tearDown(self):
-        utils.tear_down_function_mocks(giphy)
+        giphy.stdout = self.original_stdout_fn
+        giphy.stderr = self.original_stderr_fn
+        giphy.check_image_capability = self.original_check_image_capability_fn
+        giphy.display_logo = self.original_display_logo_fn
 
     def test_reads_from_a_dotfile(self):
         args = giphy.parse_arguments(["foo"])
@@ -131,12 +149,10 @@ class TestArgs(unittest.TestCase):
             columns = os.environ.get("COLUMNS")
             self.assertEqual(columns, expected_columns)
 
-        original_stdout_fn = giphy.stdout
         original_columns = os.environ.get("COLUMNS")
 
         try:
             giphy.stdout = stdout_mock
-
             with patch('sys.stdout', new=StringIO()):
                 utils.unset_environment_variable("COLUMNS")
                 expected_columns = "100"
@@ -150,12 +166,11 @@ class TestArgs(unittest.TestCase):
                 expected_columns = "90"
                 giphy.parse_arguments(["--help"])
         finally:
-            giphy.stdout = original_stdout_fn
             utils.restore_environment_variable("COLUMNS", original_columns)
 
     def test_appends_a_giphy_logo_to_usage_info(self):
         with patch('sys.stdout', new=StringIO()):
-            giphy.check_image_capability.return_value = None  # Terminal handles images, or -f/--force
+            giphy.check_image_capability.return_value = None  # The terminal handles images, or -f/--force
             giphy.parse_arguments(["--help"])
             giphy.display_logo.assert_called()
 
