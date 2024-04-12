@@ -68,7 +68,7 @@ class TestDotfile(unittest.TestCase):
         self.assertEqual(args, ["--max-cache=43"])
 
         self.remove_dotfile("~/.xdg_config/giphy/giphyrc")
-        os.environ.pop("XDG_CONFIG_HOME", None)
+        utils.unset_environment_variable("XDG_CONFIG_HOME")
 
         args, _ = giphy.read_dotfile()
         self.assertEqual(args, ["--max-cache=44"])

@@ -138,7 +138,7 @@ class TestArgs(unittest.TestCase):
             giphy.stdout = stdout_mock
 
             with patch('sys.stdout', new=StringIO()):
-                os.environ.pop("COLUMNS", None)
+                utils.unset_environment_variable("COLUMNS")
                 expected_columns = "100"
                 giphy.parse_arguments(["--help"])
 
@@ -151,10 +151,7 @@ class TestArgs(unittest.TestCase):
                 giphy.parse_arguments(["--help"])
         finally:
             giphy.stdout = original_stdout_fn
-            if original_columns:
-                os.environ["COLUMNS"] = original_columns
-            else:
-                os.environ.pop("COLUMNS", None)
+            utils.restore_environment_variable("COLUMNS", original_columns)
 
     def test_appends_a_giphy_logo_to_usage_info(self):
         with patch('sys.stdout', new=StringIO()):

@@ -11,8 +11,6 @@ from utils import AnyStringContaining, AnyStringMatching
 this_dir = os.path.dirname(os.path.abspath(__file__))
 giphy = utils.import_path("%s/../../giphy" % this_dir)
 
-unused_by_mock = None
-
 
 def get_mock_args(mode="best", topic="happy fun times"):
     return argparse.Namespace(
@@ -117,7 +115,7 @@ class TestApiUsage(unittest.TestCase):
 
     def test_falls_back_to_default_api_key(self):
         original_api_key = os.environ.get("GIPHY_API_KEY")
-        os.environ.pop("GIPHY_API_KEY", None)
+        utils.unset_environment_variable("GIPHY_API_KEY")
 
         try:
             for mode in ["id", "random", "best"]:
@@ -125,8 +123,7 @@ class TestApiUsage(unittest.TestCase):
                 giphy.choose_image(args)
                 giphy.open_url.assert_called_with(AnyStringMatching("api_key=[A-Za-z0-9]{32}"))
         finally:
-            if original_api_key:
-                os.environ["GIPHY_API_KEY"] = original_api_key
+            utils.restore_environment_variable("GIPHY_API_KEY", original_api_key)
 
     def test_raises_an_error_when_using_the_giphy_api_fails(self):
         giphy.open_url.side_effect = urllib.error.URLError("something went wrong")
