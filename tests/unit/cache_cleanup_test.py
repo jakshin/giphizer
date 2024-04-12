@@ -1,6 +1,7 @@
 import argparse
 import os
 import os.path
+import platform
 import shutil
 import unittest
 import utils
@@ -100,6 +101,8 @@ class TestCacheCleanup(unittest.TestCase):
         with self.assertRaises(OSError):
             giphy.clean_cache(args)
 
+    @unittest.skipIf(platform.system().startswith("CYGWIN_NT"),
+                     "always effectively root on Cygwin")
     def test_errors_if_it_cannot_delete_a_cached_file(self):
         init_cache_dir(1, 0o555)
         args = argparse.Namespace(max_cache=0)
