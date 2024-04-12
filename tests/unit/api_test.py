@@ -27,8 +27,6 @@ class TestApiUsage(unittest.TestCase):
         self.original_open_url_fn = None
 
     def setUp(self):
-        utils.set_up_function_mocks(giphy, "choose_image", "get_giphy_api_err_msg")
-
         mock_http_response = create_autospec(http.client.HTTPResponse)
         with open("%s/api_sample.json" % this_dir, "r") as sample_api_response_file:
             mock_http_response.read.return_value = sample_api_response_file.read()
@@ -38,7 +36,6 @@ class TestApiUsage(unittest.TestCase):
         giphy.open_url = create_autospec(giphy.open_url, return_value=mock_http_response)
 
     def tearDown(self):
-        utils.tear_down_function_mocks(giphy)
         if self.original_open_url_fn is not None:
             giphy.open_url = self.original_open_url_fn
 
