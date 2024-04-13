@@ -52,7 +52,7 @@ class TestCacheCleanup(unittest.TestCase):
         if os.path.isdir(self.test_cache_home):
             cache_dir = "%s/giphizer" % self.test_cache_home
             if os.path.exists(cache_dir):
-                os.chmod(cache_dir, 0o755, follow_symlinks=False)
+                os.chmod(cache_dir, 0o755)
             shutil.rmtree(self.test_cache_home)
 
         utils.restore_environment_variable("XDG_CACHE_HOME", self.original_xdg_cache_home)
@@ -94,6 +94,8 @@ class TestCacheCleanup(unittest.TestCase):
         self.assertEqual(count_cached_files("file-[13579]"), 5)
         self.assertEqual(count_cached_files("file-[02468]"), 0)
 
+    @unittest.skipIf(platform.system() == "Windows",
+                     "File permissions work differently on Windows")
     def test_errors_if_it_cannot_read_the_cache_directory(self):
         init_cache_dir(1, 0o333)
         args = argparse.Namespace(max_cache=0)
@@ -101,8 +103,8 @@ class TestCacheCleanup(unittest.TestCase):
         with self.assertRaises(OSError):
             giphy.clean_cache(args)
 
-    @unittest.skipIf(platform.system().startswith("CYGWIN_NT"),
-                     "always effectively root on Cygwin")
+    @unittest.skipIf(platform.system() == "Windows" or platform.system().startswith("CYGWIN_NT"),
+                     "File permissions work differently on Windows")
     def test_errors_if_it_cannot_delete_a_cached_file(self):
         init_cache_dir(1, 0o555)
         args = argparse.Namespace(max_cache=0)
