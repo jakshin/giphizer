@@ -13,7 +13,6 @@ For usage info, just run this without arguments, or with -h or --help.
 
 import argparse
 import errno
-import fcntl
 import json
 import os
 import platform
@@ -31,6 +30,9 @@ from base64 import b64encode, b64decode
 from functools import lru_cache
 from os import path
 from urllib.parse import urlencode
+
+if platform.system() == "Darwin":
+    import fcntl
 
 
 def main():
