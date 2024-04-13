@@ -1,4 +1,6 @@
+import ctypes
 import os.path
+import platform
 import shutil
 import unittest
 import utils
@@ -74,6 +76,8 @@ class TestDotfile(unittest.TestCase):
         args, _ = giphy.read_dotfile()
         self.assertEqual(args, ["--max-cache=88"])
 
+    @unittest.skipIf(platform.system() == "Windows",
+                     "File permissions work differently on Windows")
     def test_ignores_a_dotfile_without_read_permission(self):
         self.write_dotfile("~/.giphyrc", "--show-url")
         dotfile_path = os.path.expanduser("~/.giphyrc")
@@ -89,6 +93,8 @@ class TestDotfile(unittest.TestCase):
         args, _ = giphy.read_dotfile()
         self.assertEqual(args, [])
 
+    @unittest.skipIf(platform.system() == "Windows" and ctypes.windll.shell32.IsUserAnAdmin() == 0,
+                     "Must be Administrator to create symlinks on Windows")
     def test_ignores_a_symlink_to_a_device_where_a_dotfile_should_be(self):
         dotfile_path = os.path.expanduser("~/.giphyrc")
         os.symlink("/dev/urandom", dotfile_path)
@@ -96,6 +102,8 @@ class TestDotfile(unittest.TestCase):
         args, _ = giphy.read_dotfile()
         self.assertEqual(args, [])
 
+    @unittest.skipIf(platform.system() == "Windows" and ctypes.windll.shell32.IsUserAnAdmin() == 0,
+                     "Must be Administrator to create symlinks on Windows")
     def test_ignores_a_broken_symlink_where_a_dotfile_should_be(self):
         dotfile_path = os.path.expanduser("~/.giphyrc")
         os.symlink("/does-not-exist", dotfile_path)
@@ -103,6 +111,8 @@ class TestDotfile(unittest.TestCase):
         args, _ = giphy.read_dotfile()
         self.assertEqual(args, [])
 
+    @unittest.skipIf(platform.system() == "Windows" and ctypes.windll.shell32.IsUserAnAdmin() == 0,
+                     "Must be Administrator to create symlinks on Windows")
     def test_follows_a_symlink_to_a_dotfile(self):
         self.write_dotfile("~/actual-giphyrc", "--force --max-rating=pg")
         relative_link_path = os.path.expanduser("~/relative-link")

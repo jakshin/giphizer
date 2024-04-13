@@ -202,13 +202,13 @@ def read_dotfile():
     """
     dotfiles = ["~/.giphyrc"]
     config_home = os.environ.get("XDG_CONFIG_HOME")
-    if config_home is not None and config_home.startswith("/"):
-        home = os.environ.get("HOME")
-        if home is not None and home != "":
-            if not home.endswith("/"):
-                home += "/"
-            if config_home.startswith(home):
-                config_home = config_home.replace(home, "~/")
+    if config_home and (config_home.startswith("/") or platform.system() == "Windows"):
+        home = os.environ.get("HOME") or os.environ.get("USERPROFILE")
+        if home:
+            if config_home.startswith(home + "/"):
+                config_home = config_home.replace(home + "/", "~/")
+            elif config_home.startswith(home + "\\"):
+                config_home = config_home.replace(home + "\\", "~/")
         dotfiles.append("%s/giphy/giphyrc" % config_home)
     else:
         dotfiles.append("~/.config/giphy/giphyrc")
