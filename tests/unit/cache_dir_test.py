@@ -12,11 +12,12 @@ class TestCacheDir(unittest.TestCase):
     def __init__(self, methodName='runTest'):
         super().__init__(methodName)
         self.original_system_fn = None
-        self.original_xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
-        self.original_localappdata = os.environ.get("LOCALAPPDATA")
+        self.original_xdg_cache_home = None
+        self.original_localappdata = None
 
     def setUp(self):
-        return  # All relevant setup is done in __init__()
+        self.original_xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
+        self.original_localappdata = os.environ.get("LOCALAPPDATA")
 
     def tearDown(self):
         if self.original_system_fn:
@@ -26,7 +27,7 @@ class TestCacheDir(unittest.TestCase):
         utils.restore_environment_variable("XDG_CACHE_HOME", self.original_xdg_cache_home)
         utils.restore_environment_variable("LOCALAPPDATA", self.original_localappdata)
 
-    def check_cache_paths(self, expected_in_cache_dir):
+    def check_cache_paths(self, expected_in_cache_dir, xdg_cache_home="/home/user/.foo/cache"):
         """Utility method for checking cache directory use."""
         image_id = "d8MQjoGL"
         utils.unset_environment_variable("XDG_CACHE_HOME")
@@ -36,17 +37,17 @@ class TestCacheDir(unittest.TestCase):
         self.assertIn(cache_dir, cache_path)
         self.assertIn(image_id, cache_path)
 
-        os.environ["XDG_CACHE_HOME"] = "%s/.foo/cache" % (os.environ.get("HOME") or "/home")
+        os.environ["XDG_CACHE_HOME"] = xdg_cache_home
         cache_dir, cache_path = giphy.get_cache_paths(image_id)
 
-        self.assertIn("/.foo/cache/giphizer", cache_dir)
+        self.assertIn("%s/giphizer" % xdg_cache_home, cache_dir)
         self.assertIn(cache_dir, cache_path)
         self.assertIn(image_id, cache_path)
 
     def test_uses_a_dot_directory_in_the_home_directory_by_default(self):
         self.original_system_fn = platform.system
         platform.system = lambda: "Linux"
-        self.check_cache_paths("%s/.cache" % (os.environ.get("HOME") or "/home"))
+        self.check_cache_paths("%s/.cache/giphizer" % os.path.expanduser("~"))
 
     def test_uses_ideomatic_cache_dir_on_mac(self):
         self.original_system_fn = platform.system
@@ -57,7 +58,8 @@ class TestCacheDir(unittest.TestCase):
         self.original_system_fn = platform.system
         platform.system = lambda: "Windows"
         os.environ["LOCALAPPDATA"] = "C:\\foo"
-        self.check_cache_paths("%s\\%s" % ("C:\\foo", "Giphizer\\cache"))
+        self.check_cache_paths("%s\\%s" % ("C:\\foo", "Giphizer\\cache"),
+                               "%s\\.foo\\cache" % os.path.expanduser("~"))
 
 
 if __name__ == "__main__":
