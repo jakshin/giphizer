@@ -29,7 +29,7 @@ class TestCacheDir(unittest.TestCase):
     def check_cache_paths(self, expected_in_cache_dir):
         """Utility method for checking cache directory use."""
         image_id = "d8MQjoGL"
-        utils.restore_environment_variable("XDG_CACHE_HOME", None)
+        utils.unset_environment_variable("XDG_CACHE_HOME")
         cache_dir, cache_path = giphy.get_cache_paths(image_id)
 
         self.assertIn(expected_in_cache_dir, cache_dir)
