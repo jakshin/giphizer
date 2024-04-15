@@ -17,6 +17,7 @@ class TestArgs(unittest.TestCase):
         self.original_stderr_fn = None
         self.original_check_image_capability_fn = None
         self.original_display_logo_fn = None
+        self.original_read_dotfile_fn = None  # Mocked on demand
 
     def setUp(self):
         self.original_stdout_fn = giphy.stdout
@@ -34,6 +35,13 @@ class TestArgs(unittest.TestCase):
         giphy.stderr = self.original_stderr_fn
         giphy.check_image_capability = self.original_check_image_capability_fn
         giphy.display_logo = self.original_display_logo_fn
+
+        if self.original_read_dotfile_fn:
+            giphy.read_dotfile = self.original_read_dotfile_fn
+
+    def mock_dotfile_fn(self, return_words):
+        self.original_read_dotfile_fn = giphy.read_dotfile
+        giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[return_words, "~/.dot"])
 
     def test_reads_from_a_dotfile(self):
         args = giphy.parse_arguments(["foo"])
@@ -62,77 +70,65 @@ class TestArgs(unittest.TestCase):
             utils.restore_environment_variable("USERPROFILE", original_userprofile)
 
     def test_ignores_topic_in_a_dotfile(self):
-        original_read_dotfile_fn = giphy.read_dotfile
-        try:
-            dotfile_argv = ["awesome", "fun", "yay"]
-            giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[dotfile_argv, "~/.dot"])
+        self.mock_dotfile_fn(["awesome", "fun", "yay"])
 
-            with patch('sys.stdout', new=StringIO()):
-                args = giphy.parse_arguments([])
-                self.assertIsNone(args)  # Usage info displayed, because no topic
-        finally:
-            giphy.read_dotfile = original_read_dotfile_fn
+        with patch('sys.stdout', new=StringIO()):
+            args = giphy.parse_arguments([])
+            self.assertIsNone(args)  # Usage info displayed, because no topic
 
     def test_ignores_help_flags_in_a_dotfile(self):
-        original_read_dotfile_fn = giphy.read_dotfile
-        try:
-            dotfile_argv = ["--max-cache=9876", "-fh", "--help"]
-            giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[dotfile_argv, "~/.dot"])
+        self.mock_dotfile_fn(["--max-cache=9876", "-fh", "--help"])
 
-            args = giphy.parse_arguments(["awesome"])
-            self.assertEqual(args.max_cache, 9876)  # Sanity checks
-            self.assertEqual(args.force, True)
+        args = giphy.parse_arguments(["awesome"])
+        self.assertEqual(args.max_cache, 9876)  # Sanity checks
+        self.assertEqual(args.force, True)
 
-            self.assertEqual(args.help, False)
-        finally:
-            giphy.read_dotfile = original_read_dotfile_fn
+        self.assertEqual(args.help, False)
 
     def test_overrides_dotfile_options_with_command_line_options(self):
-        original_read_dotfile_fn = giphy.read_dotfile
-        try:
-            giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[["--max-cache=9999"], "~/.dot"])
-            args = giphy.parse_arguments(["foo"])
-            self.assertEqual(args.max_cache, 9999)  # Sanity check
+        self.mock_dotfile_fn(["--max-cache=9999"])
+        args = giphy.parse_arguments(["foo"])
+        self.assertEqual(args.max_cache, 9999)  # Sanity check
 
-            args = giphy.parse_arguments(["foo", "--max-cache=9998"])
-            self.assertEqual(args.max_cache, 9998)
-        finally:
-            giphy.read_dotfile = original_read_dotfile_fn
+        args = giphy.parse_arguments(["foo", "--max-cache=9998"])
+        self.assertEqual(args.max_cache, 9998)
 
     def test_errors_when_an_invalid_argument_is_passed_in_a_dotfile(self):
-        original_read_dotfile_fn = giphy.read_dotfile
-        try:
-            giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[["--foo=goo"], "~/.dot"])
+        self.mock_dotfile_fn(["--foo=goo"])
 
-            with self.assertRaises(giphy.GiphizerException):
-                args = giphy.parse_arguments(["sweet"])
+        with self.assertRaises(giphy.GiphizerException):
+            args = giphy.parse_arguments(["sweet"])
 
-                self.assertIsNone(args)
-                giphy.stderr.assert_called_once_with(AnyStringContaining("Error in ~/.dot:"))
-                giphy.stderr.assert_called_once_with(AnyStringContaining("--foo=goo"))
-                giphy.stderr.assert_called_once_with(AnyStringContaining("giphy --help"))
-        finally:
-            giphy.read_dotfile = original_read_dotfile_fn
+            self.assertIsNone(args)
+            giphy.stderr.assert_called_once_with(AnyStringContaining("Error in ~/.dot:"))
+            giphy.stderr.assert_called_once_with(AnyStringContaining("--foo=goo"))
+            giphy.stderr.assert_called_once_with(AnyStringContaining("giphy --help"))
 
     def test_errors_when_an_invalid_argument_is_passed_on_the_command_line(self):
-        original_read_dotfile_fn = giphy.read_dotfile
-        try:
-            giphy.read_dotfile = create_autospec(giphy.read_dotfile, return_value=[[], "~/.dot"])
+        self.mock_dotfile_fn([])
 
-            with self.assertRaises(giphy.GiphizerException):
-                args = giphy.parse_arguments(["sweet", "--foo=goo"])
+        with self.assertRaises(giphy.GiphizerException):
+            args = giphy.parse_arguments(["sweet", "--foo=goo"])
 
-                self.assertIsNone(args)
-                giphy.stderr.assert_called_once_with(AnyStringContaining("Error:"))
-                giphy.stderr.assert_called_once_with(AnyStringContaining("--foo=goo"))
-                giphy.stderr.assert_called_once_with(AnyStringContaining("giphy --help"))
-                giphy.stderr.assert_not_called_with(AnyStringContaining("~/.dot"))
-        finally:
-            giphy.read_dotfile = original_read_dotfile_fn
+            self.assertIsNone(args)
+            giphy.stderr.assert_called_once_with(AnyStringContaining("Error:"))
+            giphy.stderr.assert_called_once_with(AnyStringContaining("--foo=goo"))
+            giphy.stderr.assert_called_once_with(AnyStringContaining("giphy --help"))
+            giphy.stderr.assert_not_called_with(AnyStringContaining("~/.dot"))
 
     def test_normalizes_whitespace_in_the_topic(self):
         args = giphy.parse_arguments(["   something  ", "\t and more\n", "and  \v  even \t  more"])
         self.assertEqual(args.topic, "something and more and even more")
+
+    def test_errors_when_an_invalid_giphy_image_id_is_passed(self):
+        self.mock_dotfile_fn([])
+
+        with self.assertRaises(giphy.GiphizerException):
+            args = giphy.parse_arguments(["--mode=id", "aww", "yeah"])
+
+            self.assertIsNone(args)
+            giphy.stderr.assert_called_once_with(AnyStringContaining("Error:"))
+            giphy.stderr.assert_called_once_with(AnyStringContaining("For example:"))
 
     def test_prevents_negative_max_cache(self):
         args = giphy.parse_arguments(["woot"])

@@ -160,6 +160,11 @@ def parse_arguments(argv):
             topic.append(arg)
     args.topic = " ".join(topic)
 
+    # if args.mode == "id" and not re.fullmatch(r"[A-Za-z0-9]{6,24}", args.topic):
+    #     stderr("Error: in ID mode, the topic must be a Giphy image ID")
+    #     stderr("For example: JJptubufblBJP3E3DK")
+    #     raise GiphizerException
+
     # Display help/usage info, if needed
     if args.topic == "" or args.help:
         columns = int(shutil.get_terminal_size().columns)
