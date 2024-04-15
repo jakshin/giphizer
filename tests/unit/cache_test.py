@@ -37,7 +37,7 @@ class TestCache(unittest.TestCase):
                    if file.is_file()])
 
     def test_returns_a_cached_file(self):
-        cache_dir = "%s/giphizer" % os.environ.get("XDG_CACHE_HOME")
+        cache_dir = "%s/giphy" % os.environ.get("XDG_CACHE_HOME")
         Path(cache_dir).mkdir(parents=True)
         self.assertTrue(os.path.isdir(self.test_cache_home))  # Sanity check
 
@@ -53,7 +53,7 @@ class TestCache(unittest.TestCase):
         self.assertEqual(image_data, fake_image_data)
 
     def test_returns_none_if_a_file_is_not_cached(self):
-        cache_dir = "%s/giphizer" % os.environ.get("XDG_CACHE_HOME")
+        cache_dir = "%s/giphy" % os.environ.get("XDG_CACHE_HOME")
         Path(cache_dir).mkdir(parents=True)
         self.assertTrue(os.path.isdir(self.test_cache_home))  # Sanity check
 

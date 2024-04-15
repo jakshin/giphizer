@@ -710,21 +710,21 @@ def get_cache_paths(image_id):
     We respect $XDG_CACHE_HOME if present, and use per-environment conventions if not.
     https://wiki.archlinux.org/title/XDG_Base_Directory#Specification
     """
-    cache_dir = "~/.cache/giphizer"  # Default
+    cache_dir = "~/.cache/giphy"  # Default
 
     cache_home = os.environ.get("XDG_CACHE_HOME")
     if cache_home is not None and (cache_home.startswith("/") or platform.system() == "Windows"):
-        cache_dir = "%s/giphizer" % cache_home
+        cache_dir = "%s/giphy" % cache_home
 
     elif platform.system() == "Darwin":
-        cache_dir = "~/Library/Caches/Giphizer"
+        cache_dir = "~/Library/Caches/Giphy"
 
     elif platform.system() == "Windows":
         # We don't take this code path on WSL, where system() returns "Linux",
         # or on Cygwin, where it returns a value like "CYGWIN_NT-10.0-22000"
         app_data = os.environ.get("LOCALAPPDATA")
         if app_data is not None and app_data != "":
-            cache_dir = "%s\\%s" % (app_data, "Giphizer\\cache")
+            cache_dir = "%s\\%s" % (app_data, "Giphy\\cache")
 
     cache_dir = path.expanduser(cache_dir)
     if image_id is not None:

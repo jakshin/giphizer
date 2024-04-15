@@ -40,25 +40,25 @@ class TestCacheDir(unittest.TestCase):
         os.environ["XDG_CACHE_HOME"] = xdg_cache_home
         cache_dir, cache_path = giphy.get_cache_paths(image_id)
 
-        self.assertIn("%s/giphizer" % xdg_cache_home, cache_dir)
+        self.assertIn("%s/giphy" % xdg_cache_home, cache_dir)
         self.assertIn(cache_dir, cache_path)
         self.assertIn(image_id, cache_path)
 
     def test_uses_a_dot_directory_in_the_home_directory_by_default(self):
         self.original_system_fn = platform.system
         platform.system = lambda: "Linux"
-        self.check_cache_paths("%s/.cache/giphizer" % os.path.expanduser("~"))
+        self.check_cache_paths("%s/.cache/giphy" % os.path.expanduser("~"))
 
     def test_uses_ideomatic_cache_dir_on_mac(self):
         self.original_system_fn = platform.system
         platform.system = lambda: "Darwin"
-        self.check_cache_paths("/Library/Caches/Giphizer")
+        self.check_cache_paths("/Library/Caches/Giphy")
 
     def test_uses_ideomatic_cache_dir_on_windows(self):
         self.original_system_fn = platform.system
         platform.system = lambda: "Windows"
         os.environ["LOCALAPPDATA"] = "C:\\foo"
-        self.check_cache_paths("%s\\%s" % ("C:\\foo", "Giphizer\\cache"),
+        self.check_cache_paths("%s\\%s" % ("C:\\foo", "Giphy\\cache"),
                                "%s\\.foo\\cache" % os.path.expanduser("~"))
 
 

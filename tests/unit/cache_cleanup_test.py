@@ -14,7 +14,7 @@ giphy = utils.import_path("%s/../../giphy" % this_dir)
 
 
 def init_cache_dir(num_files, mode=None):
-    cache_dir = "%s/giphizer" % os.environ.get("XDG_CACHE_HOME")
+    cache_dir = "%s/giphy" % os.environ.get("XDG_CACHE_HOME")
     Path(cache_dir).mkdir(parents=True)
 
     for i in range(num_files):
@@ -32,7 +32,7 @@ def init_cache_dir(num_files, mode=None):
 
 
 def count_cached_files(pattern="*"):
-    cache_dir = "%s/giphizer" % os.environ.get("XDG_CACHE_HOME")
+    cache_dir = "%s/giphy" % os.environ.get("XDG_CACHE_HOME")
     return len([file for file in Path(cache_dir).rglob(pattern)
                if file.is_file()])
 
@@ -50,7 +50,7 @@ class TestCacheCleanup(unittest.TestCase):
 
     def tearDown(self):
         if os.path.isdir(self.test_cache_home):
-            cache_dir = "%s/giphizer" % self.test_cache_home
+            cache_dir = "%s/giphy" % self.test_cache_home
             if os.path.exists(cache_dir):
                 os.chmod(cache_dir, 0o755)
             shutil.rmtree(self.test_cache_home)
